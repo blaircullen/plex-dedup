@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { ArrowUpCircle, Search, Download, CheckCircle, XCircle } from 'lucide-react'
+import { ArrowUpCircle, Search, Download, CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import { GlassCard, StatCard, Button, Badge, ProgressBar, EmptyState, SkeletonTable, toast } from '../components/ui'
 import { useUpgradeStatus } from '../hooks/useUpgradeStatus'
 
@@ -27,7 +27,7 @@ const matchVariant = (m: string | null) => {
 }
 
 const statusVariant = (s: string) => {
-  const map: Record<string, 'default' | 'blue' | 'amber' | 'emerald' | 'red'> = {
+  const map: Record<string, 'default' | 'blue' | 'amber' | 'emerald' | 'red' | 'lime'> = {
     pending: 'default', approved: 'blue', downloading: 'amber',
     completed: 'emerald', failed: 'red', skipped: 'default',
   }
@@ -37,12 +37,17 @@ const statusVariant = (s: string) => {
 export default function Upgrades() {
   const [queue, setQueue] = useState<QueueItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [scanning, setScanning] = useState(false)
   const [filterTab, setFilterTab] = useState<FilterTab>('all')
   const [actionInProgress, setActionInProgress] = useState<Set<number>>(new Set())
   const [recentlyApproved, setRecentlyApproved] = useState<Set<number>>(new Set())
+  const [downloadRequested, setDownloadRequested] = useState(false)
+  const [searchRequested, setSearchRequested] = useState(false)
 
-  const upgradeStatus = useUpgradeStatus(scanning)
+  const { status: upgradeStatus } = useUpgradeStatus()
+  const prevPhaseRef = useRef(upgradeStatus.phase)
+
+  const isDownloading = upgradeStatus.phase === 'downloading' || downloadRequested
+  const isSearching = upgradeStatus.phase === 'searching' || searchRequested
 
   const fetchQueue = useCallback(async () => {
     setLoading(true)
@@ -63,20 +68,32 @@ export default function Upgrades() {
     fetchQueue()
   }, [fetchQueue])
 
+  // React to phase transitions
   useEffect(() => {
-    if (scanning && !upgradeStatus.running && upgradeStatus.total > 0) {
-      setScanning(false)
-      toast.success(`Search complete: found ${upgradeStatus.total} candidates`)
+    const prev = prevPhaseRef.current
+    prevPhaseRef.current = upgradeStatus.phase
+
+    // Clear local request flags once backend confirms
+    if (upgradeStatus.phase === 'downloading') setDownloadRequested(false)
+    if (upgradeStatus.phase === 'searching') setSearchRequested(false)
+
+    // Phase just ended → refresh queue
+    if (prev !== 'idle' && upgradeStatus.phase === 'idle') {
+      if (prev === 'searching') toast.success('Search complete')
+      if (prev === 'downloading') toast.success('Downloads complete')
+      setDownloadRequested(false)
+      setSearchRequested(false)
       fetchQueue()
     }
-  }, [upgradeStatus.running, upgradeStatus.total, scanning, fetchQueue])
+  }, [upgradeStatus.phase, fetchQueue])
 
   const handleScan = async () => {
-    setScanning(true)
+    setSearchRequested(true)
     try {
       await fetch('/api/upgrades/scan', { method: 'POST' })
+      toast.success('Search started')
     } catch {
-      setScanning(false)
+      setSearchRequested(false)
       toast.error('Failed to start upgrade scan')
     }
   }
@@ -127,10 +144,12 @@ export default function Upgrades() {
   }
 
   const handleDownloadApproved = async () => {
+    setDownloadRequested(true)
     try {
       await fetch('/api/upgrades/download-approved', { method: 'POST' })
       toast.success(`Download started for ${approvedCount} tracks`)
     } catch {
+      setDownloadRequested(false)
       toast.error('Failed to start downloads')
     }
   }
@@ -153,11 +172,15 @@ export default function Upgrades() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold font-[family-name:var(--font-family-display)]">Upgrades</h2>
         <div className="flex gap-3">
-          {approvedCount > 0 && (
-            <Button variant="primary" onClick={handleDownloadApproved}>
+          {approvedCount > 0 && !isDownloading && (
+            <button
+              onClick={handleDownloadApproved}
+              disabled={isDownloading}
+              className="px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 inline-flex items-center gap-2 bg-lime text-base-900 hover:bg-lime/90 disabled:opacity-60"
+            >
               <Download className="w-4 h-4" />
               Download Approved ({approvedCount})
-            </Button>
+            </button>
           )}
           {exactPendingCount > 0 && (
             <Button variant="secondary" onClick={handleApproveAllExact}>
@@ -165,21 +188,62 @@ export default function Upgrades() {
               Approve All Exact ({exactPendingCount})
             </Button>
           )}
-          <Button variant="secondary" onClick={handleScan} disabled={scanning}>
-            <Search className="w-4 h-4" />
-            {scanning ? 'Searching...' : 'Find Upgrades'}
-          </Button>
+          <button
+            onClick={handleScan}
+            disabled={isSearching || isDownloading}
+            className="px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 inline-flex items-center gap-2 bg-base-700 text-base-300 hover:bg-base-600 border border-glass-border disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            {isSearching ? 'Searching...' : 'Find Upgrades'}
+          </button>
         </div>
       </div>
 
-      {scanning && upgradeStatus.running && (
+      {/* Search progress panel */}
+      {isSearching && (
         <GlassCard className="p-5">
           <ProgressBar
             value={upgradeStatus.progress}
             max={upgradeStatus.total}
             label="Searching for upgrades..."
-            detail={upgradeStatus.current_query || `${upgradeStatus.progress}/${upgradeStatus.total}`}
+            detail={upgradeStatus.total > 0
+              ? `${upgradeStatus.current || `${upgradeStatus.progress}/${upgradeStatus.total}`}`
+              : 'Starting...'
+            }
           />
+        </GlassCard>
+      )}
+
+      {/* Download progress panel */}
+      {isDownloading && (
+        <GlassCard className="p-5 border-lime/20">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 rounded-xl bg-lime-dim">
+              <Download className="w-4 h-4 text-lime animate-bounce" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">Downloading FLAC upgrades</p>
+              <p className="text-xs text-base-400">
+                {upgradeStatus.total > 0
+                  ? `Track ${upgradeStatus.progress} of ${upgradeStatus.total}`
+                  : 'Starting downloads...'
+                }
+              </p>
+            </div>
+          </div>
+          <ProgressBar
+            value={upgradeStatus.progress}
+            max={upgradeStatus.total}
+            detail={upgradeStatus.total > 0
+              ? `${Math.round((upgradeStatus.progress / upgradeStatus.total) * 100)}%`
+              : undefined
+            }
+          />
+          {upgradeStatus.current && (
+            <p className="text-xs text-base-400 mt-2 truncate">
+              Now downloading: {upgradeStatus.current}
+            </p>
+          )}
         </GlassCard>
       )}
 

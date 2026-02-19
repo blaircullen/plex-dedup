@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/upgrades", tags=["upgrades"])
 
-upgrade_status = {"running": False, "progress": 0, "total": 0, "current": ""}
+upgrade_status = {"running": False, "progress": 0, "total": 0, "current": "", "phase": "idle"}
 
 
 @router.get("/candidates")
@@ -122,6 +122,7 @@ async def download_approved(background_tasks: BackgroundTasks):
 def run_upgrade_search():
     """Background task: search squid.wtf for each pending queue item."""
     upgrade_status["running"] = True
+    upgrade_status["phase"] = "searching"
 
     with get_db() as db:
         pending = db.execute(
@@ -174,6 +175,7 @@ def run_upgrade_search():
                 )
 
     upgrade_status["running"] = False
+    upgrade_status["phase"] = "idle"
 
 
 def run_downloads():
@@ -190,7 +192,15 @@ def run_downloads():
             WHERE uq.status = 'approved' AND uq.squid_url IS NOT NULL
         """).fetchall()
 
-    for item in approved:
+    upgrade_status["running"] = True
+    upgrade_status["phase"] = "downloading"
+    upgrade_status["total"] = len(approved)
+    upgrade_status["progress"] = 0
+    upgrade_status["current"] = ""
+
+    for i, item in enumerate(approved):
+        upgrade_status["progress"] = i + 1
+        upgrade_status["current"] = f"{item['artist']} - {item['title']}"
         tidal_track_id = int(item["squid_url"])  # stored as string tidal_id
 
         with get_db() as db:
@@ -263,3 +273,7 @@ def run_downloads():
             staging_path = staging / f"{item['artist']} - {item['title']}.flac".replace("/", "_")
             if staging_path.exists():
                 staging_path.unlink()
+
+    upgrade_status["running"] = False
+    upgrade_status["phase"] = "idle"
+    upgrade_status["current"] = ""

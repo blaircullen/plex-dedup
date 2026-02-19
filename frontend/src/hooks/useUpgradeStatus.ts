@@ -1,44 +1,41 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 
-interface UpgradeStatus {
+export interface UpgradeStatus {
   running: boolean
-  current_query: string
+  phase: 'idle' | 'searching' | 'downloading'
+  current: string
   progress: number
   total: number
 }
 
-export function useUpgradeStatus(enabled: boolean) {
-  const [status, setStatus] = useState<UpgradeStatus>({
-    running: false, current_query: '', progress: 0, total: 0,
-  })
+const INITIAL: UpgradeStatus = {
+  running: false, phase: 'idle', current: '', progress: 0, total: 0,
+}
+
+export function useUpgradeStatus() {
+  const [status, setStatus] = useState<UpgradeStatus>(INITIAL)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const mountedRef = useRef(true)
+
+  const poll = useCallback(() => {
+    fetch('/api/upgrades/status')
+      .then(r => r.json())
+      .then((data: UpgradeStatus) => {
+        if (mountedRef.current) setStatus(data)
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
-    if (!enabled) {
-      if (timerRef.current) clearInterval(timerRef.current)
-      return
-    }
-
-    const poll = () => {
-      fetch('/api/upgrades/status')
-        .then(r => r.json())
-        .then((data: UpgradeStatus) => {
-          setStatus(data)
-          if (!data.running && timerRef.current) {
-            clearInterval(timerRef.current)
-            timerRef.current = null
-          }
-        })
-        .catch(() => {})
-    }
-
+    mountedRef.current = true
     poll()
     timerRef.current = setInterval(poll, 2000)
 
     return () => {
+      mountedRef.current = false
       if (timerRef.current) clearInterval(timerRef.current)
     }
-  }, [enabled])
+  }, [poll])
 
-  return status
+  return { status, poll }
 }
