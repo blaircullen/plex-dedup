@@ -2,6 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, WebSocket
 from database import get_db
 from scanner import scan_directory, generate_fingerprint
 from pathlib import Path
+import asyncio
 import os
 
 router = APIRouter(prefix="/api/scan", tags=["scan"])
@@ -38,6 +39,17 @@ async def start_scan(background_tasks: BackgroundTasks):
 def get_scan_status():
     return scan_status
 
+def _broadcast_sync(data: dict):
+    """Broadcast from sync context."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.ensure_future(broadcast(data))
+        else:
+            loop.run_until_complete(broadcast(data))
+    except RuntimeError:
+        pass
+
 def run_scan(music_path: Path):
     scan_status["running"] = True
     scan_status["progress"] = 0
@@ -50,6 +62,9 @@ def run_scan(music_path: Path):
         for i, meta in enumerate(scan_directory(music_path)):
             scan_status["progress"] = i + 1
             scan_status["current_file"] = meta["file_path"]
+
+            if (i + 1) % 10 == 0 or i + 1 == total:
+                _broadcast_sync(dict(scan_status))
 
             existing = db.execute(
                 "SELECT id FROM tracks WHERE file_path = ?", (meta["file_path"],)
@@ -73,3 +88,4 @@ def run_scan(music_path: Path):
             ))
 
     scan_status["running"] = False
+    _broadcast_sync(dict(scan_status))
