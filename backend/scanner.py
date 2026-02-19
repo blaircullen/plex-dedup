@@ -1,4 +1,6 @@
+import json
 import os
+import subprocess
 from pathlib import Path
 from typing import Generator
 from mutagen import File as MutagenFile
@@ -104,6 +106,22 @@ def quality_score(meta: dict) -> int:
     score += bitrate
 
     return score
+
+
+def generate_fingerprint(file_path: Path) -> str:
+    """Generate Chromaprint fingerprint using fpcalc CLI."""
+    file_path = Path(file_path)
+    try:
+        result = subprocess.run(
+            ["fpcalc", "-json", str(file_path)],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode != 0:
+            return ""
+        data = json.loads(result.stdout)
+        return data.get("fingerprint", "")
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
+        return ""
 
 
 def scan_directory(root: Path) -> Generator[dict, None, None]:
