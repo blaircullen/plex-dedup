@@ -11,12 +11,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="plex-dedup", version="0.1.0", lifespan=lifespan)
 
-from routes import scan, dupes, trash, stats
+from routes import scan, dupes, trash, stats, settings
 
 app.include_router(scan.router)
 app.include_router(dupes.router)
 app.include_router(trash.router)
 app.include_router(stats.router)
+app.include_router(settings.router)
 
 @app.get("/api/health")
 def health():

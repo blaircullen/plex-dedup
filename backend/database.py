@@ -63,6 +63,11 @@ def init_db():
                 performed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            );
+
             CREATE INDEX IF NOT EXISTS idx_tracks_artist_title ON tracks(artist, title);
             CREATE INDEX IF NOT EXISTS idx_tracks_status ON tracks(status);
             CREATE INDEX IF NOT EXISTS idx_tracks_format ON tracks(format);
