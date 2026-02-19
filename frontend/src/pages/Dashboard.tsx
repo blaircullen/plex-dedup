@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
-import { Music, HardDrive, Copy, ArrowUpCircle } from 'lucide-react'
-import { useScanProgress } from '../hooks/useScanProgress'
-import { GlassCard, StatCard, Button, ProgressBar, Skeleton, toast } from '../components/ui'
+import { Music, HardDrive, Copy, ArrowUpCircle, Loader2 } from 'lucide-react'
+import { useScan } from '../hooks/ScanContext'
+import { GlassCard, StatCard, ProgressBar, Skeleton, toast } from '../components/ui'
 import { apiGet } from '../lib/api'
 
 interface Stats {
@@ -19,6 +19,7 @@ const COLORS = ['#CCFF00', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
+  const scan = useScan()
 
   const fetchStats = useCallback(() => {
     apiGet<Stats>('/api/stats/')
@@ -27,15 +28,17 @@ export default function Dashboard() {
       .finally(() => setLoading(false))
   }, [])
 
-  const progress = useScanProgress(fetchStats)
-
   useEffect(() => {
     fetchStats()
   }, [fetchStats])
 
   const startScan = async () => {
-    await fetch('/api/scan/start', { method: 'POST' })
-    toast.success('Scan started')
+    try {
+      await scan.requestScan()
+      toast.success('Scan started')
+    } catch {
+      toast.error('Failed to start scan')
+    }
   }
 
   if (loading) {
@@ -54,20 +57,30 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold font-[family-name:var(--font-family-display)]">Library Overview</h2>
-        <Button onClick={startScan} disabled={progress.running}>
-          {progress.running ? 'Scanning...' : 'Scan Now'}
-        </Button>
+        <button
+          onClick={startScan}
+          disabled={scan.running}
+          className="px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed bg-lime text-base-900 hover:bg-lime/90"
+        >
+          {scan.running && <Loader2 className="w-4 h-4 animate-spin" />}
+          {scan.running ? 'Scanning...' : 'Scan Now'}
+        </button>
       </div>
 
-      {progress.running && (
+      {scan.running && (
         <GlassCard className="p-5">
           <ProgressBar
-            value={progress.progress}
-            max={progress.total}
+            value={scan.progress}
+            max={scan.total}
             label="Scanning library..."
-            detail={`${progress.progress.toLocaleString()} / ${progress.total.toLocaleString()}`}
+            detail={scan.total > 0
+              ? `${scan.progress.toLocaleString()} / ${scan.total.toLocaleString()}`
+              : 'Starting...'
+            }
           />
-          <p className="text-xs text-base-500 mt-2 truncate">{progress.current_file}</p>
+          {scan.current_file && (
+            <p className="text-xs text-base-500 mt-2 truncate">{scan.current_file}</p>
+          )}
         </GlassCard>
       )}
 

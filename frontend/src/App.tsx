@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { Sidebar } from './components/layout/Sidebar'
 import { ActivityPanel } from './components/layout/ActivityPanel'
+import { ScanProvider } from './hooks/ScanContext'
 import { Toaster } from './components/ui'
 import Dashboard from './pages/Dashboard'
 import Duplicates from './pages/Duplicates'
@@ -36,16 +37,18 @@ function AnimatedRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen">
-        <Sidebar />
-        <main className="ml-[72px] p-8">
-          <div className="mb-6 flex justify-end">
-            <ActivityPanel />
-          </div>
-          <AnimatedRoutes />
-        </main>
-        <Toaster />
-      </div>
+      <ScanProvider>
+        <div className="min-h-screen">
+          <Sidebar />
+          <main className="ml-[72px] p-8">
+            <div className="mb-6 flex justify-end">
+              <ActivityPanel />
+            </div>
+            <AnimatedRoutes />
+          </main>
+          <Toaster />
+        </div>
+      </ScanProvider>
     </BrowserRouter>
   )
 }
