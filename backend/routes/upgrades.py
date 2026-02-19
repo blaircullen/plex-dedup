@@ -136,46 +136,47 @@ def run_upgrade_search():
     # Group by album to avoid redundant searches
     searched_albums = {}
 
-    for i, item in enumerate(pending):
-        upgrade_status["progress"] = i + 1
-        upgrade_status["current"] = f"{item['artist']} - {item['title']}"
+    try:
+        for i, item in enumerate(pending):
+            upgrade_status["progress"] = i + 1
+            upgrade_status["current"] = f"{item['artist']} - {item['title']}"
 
-        try:
-            match = asyncio.run(find_and_match_track(
-                artist=item["artist"],
-                album=item["album"],
-                title=item["title"],
-                track_number=item["track_number"],
-                rate_limit=3.0,
-            ))
+            try:
+                match = asyncio.run(find_and_match_track(
+                    artist=item["artist"],
+                    album=item["album"],
+                    title=item["title"],
+                    track_number=item["track_number"],
+                    rate_limit=3.0,
+                ))
 
-            with get_db() as db:
-                if match:
-                    db.execute("""
-                        UPDATE upgrade_queue
-                        SET match_type = ?, squid_url = ?, status = ?
-                        WHERE id = ?
-                    """, (
-                        match["match_type"],
-                        str(match["tidal_id"]),
-                        "pending",  # stays pending until approved
-                        item["id"],
-                    ))
-                else:
+                with get_db() as db:
+                    if match and match.get("tidal_id") is not None:
+                        db.execute("""
+                            UPDATE upgrade_queue
+                            SET match_type = ?, squid_url = ?, status = ?
+                            WHERE id = ?
+                        """, (
+                            match["match_type"],
+                            str(match["tidal_id"]),
+                            "pending",  # stays pending until approved
+                            item["id"],
+                        ))
+                    else:
+                        db.execute(
+                            "UPDATE upgrade_queue SET match_type = 'none', status = 'skipped' WHERE id = ?",
+                            (item["id"],)
+                        )
+            except Exception as e:
+                logger.error(f"Error searching for {item['artist']} - {item['title']}: {e}")
+                with get_db() as db:
                     db.execute(
-                        "UPDATE upgrade_queue SET match_type = 'none', status = 'skipped' WHERE id = ?",
+                        "UPDATE upgrade_queue SET status = 'failed' WHERE id = ?",
                         (item["id"],)
                     )
-        except Exception as e:
-            logger.error(f"Error searching for {item['artist']} - {item['title']}: {e}")
-            with get_db() as db:
-                db.execute(
-                    "UPDATE upgrade_queue SET status = 'failed' WHERE id = ?",
-                    (item["id"],)
-                )
-
-    upgrade_status["running"] = False
-    upgrade_status["phase"] = "idle"
+    finally:
+        upgrade_status["running"] = False
+        upgrade_status["phase"] = "idle"
 
 
 def run_downloads():
@@ -189,7 +190,9 @@ def run_downloads():
             SELECT uq.*, t.file_path, t.artist, t.title, t.album, t.track_number
             FROM upgrade_queue uq
             JOIN tracks t ON uq.track_id = t.id
-            WHERE uq.status = 'approved' AND uq.squid_url IS NOT NULL
+            WHERE uq.status = 'approved'
+              AND uq.squid_url IS NOT NULL
+              AND uq.squid_url != 'None'
         """).fetchall()
 
     upgrade_status["running"] = True
@@ -198,82 +201,83 @@ def run_downloads():
     upgrade_status["progress"] = 0
     upgrade_status["current"] = ""
 
-    for i, item in enumerate(approved):
-        upgrade_status["progress"] = i + 1
-        upgrade_status["current"] = f"{item['artist']} - {item['title']}"
-        tidal_track_id = int(item["squid_url"])  # stored as string tidal_id
+    try:
+        for i, item in enumerate(approved):
+            upgrade_status["progress"] = i + 1
+            upgrade_status["current"] = f"{item['artist']} - {item['title']}"
 
-        with get_db() as db:
-            db.execute("UPDATE upgrade_queue SET status = 'downloading' WHERE id = ?", (item["id"],))
-
-        try:
-            # Get download URL (try hi-res first, falls back to lossless)
-            dl_info = asyncio.run(get_download_url(tidal_track_id, QUALITY_HI_RES, rate_limit=2.0))
-
-            # Download to staging
-            safe_name = f"{item['artist']} - {item['title']}.flac".replace("/", "_")
-            staging_path = staging / safe_name
-            asyncio.run(download_flac(dl_info["url"], staging_path, rate_limit=1.0))
-
-            # Verify the download by reading its metadata
-            new_meta = read_track_metadata(staging_path)
-            if new_meta["format"] != "flac" or new_meta["file_size"] < 1000:
-                raise ValueError("Downloaded file is not a valid FLAC")
-
-            # Move original lossy file to trash
-            original_path = Path(item["file_path"])
-            dest = trash_file(original_path, trash_dir, music_root)
-
-            # Move FLAC to original location (same dir, new extension)
-            flac_dest = original_path.with_suffix(".flac")
-            staging_path.rename(flac_dest)
-
-            # Update database
             with get_db() as db:
-                # Mark original as upgraded
-                db.execute("UPDATE tracks SET status = 'upgraded' WHERE id = ?", (item["track_id"],))
+                db.execute("UPDATE upgrade_queue SET status = 'downloading' WHERE id = ?", (item["id"],))
 
-                # Log the file action
-                db.execute(
-                    "INSERT INTO file_actions (track_id, action, source_path, dest_path) VALUES (?, 'trash', ?, ?)",
-                    (item["track_id"], item["file_path"], dest)
-                )
+            try:
+                tidal_track_id = int(item["squid_url"])
+                # Get download URL (try hi-res first, falls back to lossless)
+                dl_info = asyncio.run(get_download_url(tidal_track_id, QUALITY_HI_RES, rate_limit=2.0))
 
-                # Insert new FLAC track
-                db.execute("""
-                    INSERT INTO tracks (file_path, file_size, format, bitrate, bit_depth,
-                        sample_rate, duration, artist, album_artist, album, title,
-                        track_number, disc_number, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
-                """, (
-                    str(flac_dest), new_meta["file_size"], "flac", 0,
-                    dl_info["bit_depth"], dl_info["sample_rate"], new_meta["duration"],
-                    new_meta["artist"] or item["artist"],
-                    new_meta.get("album_artist", ""),
-                    new_meta["album"] or item["album"],
-                    new_meta["title"] or item["title"],
-                    new_meta["track_number"] or item["track_number"],
-                    new_meta.get("disc_number", 1),
-                ))
+                # Download to staging
+                safe_name = f"{item['artist']} - {item['title']}.flac".replace("/", "_")
+                staging_path = staging / safe_name
+                asyncio.run(download_flac(dl_info["url"], staging_path, rate_limit=1.0))
 
-                # Mark queue item complete
-                db.execute(
-                    "UPDATE upgrade_queue SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (item["id"],)
-                )
+                # Verify the download by reading its metadata
+                new_meta = read_track_metadata(staging_path)
+                if new_meta["format"] != "flac" or new_meta["file_size"] < 1000:
+                    raise ValueError("Downloaded file is not a valid FLAC")
 
-            logger.info(f"Upgraded: {item['artist']} - {item['title']} ({dl_info['bit_depth']}bit/{dl_info['sample_rate']}Hz)")
+                # Move original lossy file to trash
+                original_path = Path(item["file_path"])
+                dest = trash_file(original_path, trash_dir, music_root)
 
-        except Exception as e:
-            logger.error(f"Download failed for {item['artist']} - {item['title']}: {e}")
-            with get_db() as db:
-                db.execute("UPDATE upgrade_queue SET status = 'failed' WHERE id = ?", (item["id"],))
+                # Move FLAC to original location (same dir, new extension)
+                flac_dest = original_path.with_suffix(".flac")
+                staging_path.rename(flac_dest)
 
-            # Clean up staging file if it exists
-            staging_path = staging / f"{item['artist']} - {item['title']}.flac".replace("/", "_")
-            if staging_path.exists():
-                staging_path.unlink()
+                # Update database
+                with get_db() as db:
+                    # Mark original as upgraded
+                    db.execute("UPDATE tracks SET status = 'upgraded' WHERE id = ?", (item["track_id"],))
 
-    upgrade_status["running"] = False
-    upgrade_status["phase"] = "idle"
-    upgrade_status["current"] = ""
+                    # Log the file action
+                    db.execute(
+                        "INSERT INTO file_actions (track_id, action, source_path, dest_path) VALUES (?, 'trash', ?, ?)",
+                        (item["track_id"], item["file_path"], dest)
+                    )
+
+                    # Insert new FLAC track
+                    db.execute("""
+                        INSERT INTO tracks (file_path, file_size, format, bitrate, bit_depth,
+                            sample_rate, duration, artist, album_artist, album, title,
+                            track_number, disc_number, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+                    """, (
+                        str(flac_dest), new_meta["file_size"], "flac", 0,
+                        dl_info["bit_depth"], dl_info["sample_rate"], new_meta["duration"],
+                        new_meta["artist"] or item["artist"],
+                        new_meta.get("album_artist", ""),
+                        new_meta["album"] or item["album"],
+                        new_meta["title"] or item["title"],
+                        new_meta["track_number"] or item["track_number"],
+                        new_meta.get("disc_number", 1),
+                    ))
+
+                    # Mark queue item complete
+                    db.execute(
+                        "UPDATE upgrade_queue SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = ?",
+                        (item["id"],)
+                    )
+
+                logger.info(f"Upgraded: {item['artist']} - {item['title']} ({dl_info['bit_depth']}bit/{dl_info['sample_rate']}Hz)")
+
+            except Exception as e:
+                logger.error(f"Download failed for {item['artist']} - {item['title']}: {e}")
+                with get_db() as db:
+                    db.execute("UPDATE upgrade_queue SET status = 'failed' WHERE id = ?", (item["id"],))
+
+                # Clean up staging file if it exists
+                staging_path = staging / f"{item['artist']} - {item['title']}.flac".replace("/", "_")
+                if staging_path.exists():
+                    staging_path.unlink()
+    finally:
+        upgrade_status["running"] = False
+        upgrade_status["phase"] = "idle"
+        upgrade_status["current"] = ""
