@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import { useScanProgress } from '../hooks/useScanProgress'
 
 interface Stats {
   total_tracks: number
