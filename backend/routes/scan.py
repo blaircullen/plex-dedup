@@ -1,6 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks, WebSocket
 from database import get_db
-from scanner import scan_directory, generate_fingerprint
+from scanner import scan_directory, generate_fingerprint, AUDIO_EXTENSIONS
 from pathlib import Path
 import asyncio
 import os
@@ -54,8 +54,12 @@ def run_scan(music_path: Path):
     scan_status["running"] = True
     scan_status["progress"] = 0
 
-    # Count files first for progress
-    total = sum(1 for _ in scan_directory(music_path))
+    # Fast file count — just check extensions, no metadata reads
+    total = 0
+    for dirpath, _, filenames in os.walk(music_path):
+        for f in filenames:
+            if Path(f).suffix.lower() in AUDIO_EXTENSIONS:
+                total += 1
     scan_status["total"] = total
 
     with get_db() as db:
