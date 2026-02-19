@@ -18,7 +18,7 @@ Python 3.12, FastAPI, SQLite, React 18, Vite, Tailwind CSS
   - `scanner.py` — audio tag reading (mutagen) and fingerprinting (chromaprint)
   - `dedup.py` — metadata grouping, quality ranking, duplicate detection
   - `file_manager.py` — trash/restore/empty file operations
-  - `upgrade_service.py` — squid.wtf search/download (placeholder API integration)
+  - `upgrade_service.py` — squid.wtf/Tidal search, matching, and FLAC download
   - `database.py` — SQLite schema and connection management
   - `routes/` — FastAPI routers (scan, dupes, trash, stats, upgrades, settings)
 - `frontend/` — React SPA (Vite + Tailwind)
