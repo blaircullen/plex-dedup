@@ -1,4 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
+import { ArrowUpCircle, Search, Download, CheckCircle, XCircle } from 'lucide-react'
+import { GlassCard, StatCard, Button, Badge, ProgressBar, EmptyState, SkeletonTable, toast } from '../components/ui'
+import { useUpgradeStatus } from '../hooks/useUpgradeStatus'
 
 interface QueueItem {
   id: number
@@ -16,27 +20,18 @@ interface QueueItem {
 
 type FilterTab = 'all' | 'pending' | 'approved' | 'completed' | 'skipped'
 
-const MATCH_BADGE: Record<string, string> = {
-  exact: 'bg-emerald-900/50 text-emerald-400 border border-emerald-800',
-  fuzzy: 'bg-amber-900/50 text-amber-400 border border-amber-800',
+const matchVariant = (m: string | null) => {
+  if (m === 'exact') return 'emerald' as const
+  if (m === 'fuzzy') return 'amber' as const
+  return 'default' as const
 }
 
-const STATUS_BADGE: Record<string, string> = {
-  pending: 'bg-zinc-800 text-zinc-400 border border-zinc-700',
-  approved: 'bg-blue-900/50 text-blue-400 border border-blue-800',
-  downloading: 'bg-amber-900/50 text-amber-400 border border-amber-800',
-  completed: 'bg-emerald-900/50 text-emerald-400 border border-emerald-800',
-  failed: 'bg-red-900/50 text-red-400 border border-red-800',
-  skipped: 'bg-zinc-800 text-zinc-500 border border-zinc-700',
-}
-
-function matchBadgeClass(matchType: string | null): string {
-  if (!matchType) return 'bg-zinc-800 text-zinc-500 border border-zinc-700'
-  return MATCH_BADGE[matchType] ?? 'bg-zinc-800 text-zinc-500 border border-zinc-700'
-}
-
-function statusBadgeClass(status: string): string {
-  return STATUS_BADGE[status] ?? 'bg-zinc-800 text-zinc-500 border border-zinc-700'
+const statusVariant = (s: string) => {
+  const map: Record<string, 'default' | 'blue' | 'amber' | 'emerald' | 'red'> = {
+    pending: 'default', approved: 'blue', downloading: 'amber',
+    completed: 'emerald', failed: 'red', skipped: 'default',
+  }
+  return map[s] ?? 'default'
 }
 
 export default function Upgrades() {
@@ -45,7 +40,9 @@ export default function Upgrades() {
   const [scanning, setScanning] = useState(false)
   const [filterTab, setFilterTab] = useState<FilterTab>('all')
   const [actionInProgress, setActionInProgress] = useState<Set<number>>(new Set())
-  const [bulkApproving, setBulkApproving] = useState(false)
+  const [recentlyApproved, setRecentlyApproved] = useState<Set<number>>(new Set())
+
+  const upgradeStatus = useUpgradeStatus(scanning)
 
   const fetchQueue = useCallback(async () => {
     setLoading(true)
@@ -55,6 +52,7 @@ export default function Upgrades() {
       const data: QueueItem[] = await res.json()
       setQueue(data)
     } catch {
+      toast.error('Failed to load upgrade queue')
       setQueue([])
     } finally {
       setLoading(false)
@@ -65,125 +63,130 @@ export default function Upgrades() {
     fetchQueue()
   }, [fetchQueue])
 
+  useEffect(() => {
+    if (scanning && !upgradeStatus.running && upgradeStatus.total > 0) {
+      setScanning(false)
+      toast.success(`Search complete: found ${upgradeStatus.total} candidates`)
+      fetchQueue()
+    }
+  }, [upgradeStatus.running, upgradeStatus.total, scanning, fetchQueue])
+
   const handleScan = async () => {
     setScanning(true)
     try {
       await fetch('/api/upgrades/scan', { method: 'POST' })
-      await fetchQueue()
-    } finally {
+    } catch {
       setScanning(false)
+      toast.error('Failed to start upgrade scan')
     }
   }
 
-  const handleApprove = async (id: number) => {
+  const handleApprove = async (id: number, artist: string, title: string) => {
     setActionInProgress(prev => new Set(prev).add(id))
     try {
       await fetch(`/api/upgrades/queue/${id}/approve`, { method: 'POST' })
       setQueue(prev => prev.map(item =>
         item.id === id ? { ...item, status: 'approved' } : item
       ))
+      setRecentlyApproved(prev => new Set(prev).add(id))
+      setTimeout(() => setRecentlyApproved(prev => { const next = new Set(prev); next.delete(id); return next }), 2000)
+      toast.success(`Approved: ${artist} - ${title}`)
+    } catch {
+      toast.error('Failed to approve')
     } finally {
-      setActionInProgress(prev => {
-        const next = new Set(prev)
-        next.delete(id)
-        return next
-      })
+      setActionInProgress(prev => { const next = new Set(prev); next.delete(id); return next })
     }
   }
 
-  const handleSkip = async (id: number) => {
+  const handleSkip = async (id: number, artist: string, title: string) => {
     setActionInProgress(prev => new Set(prev).add(id))
     try {
       await fetch(`/api/upgrades/queue/${id}/skip`, { method: 'POST' })
-      setQueue(prev => prev.map(item =>
-        item.id === id ? { ...item, status: 'skipped' } : item
-      ))
+      setQueue(prev => prev.filter(item => item.id !== id))
+      toast(`Skipped: ${artist} - ${title}`, { icon: '⏭' })
+    } catch {
+      toast.error('Failed to skip')
     } finally {
-      setActionInProgress(prev => {
-        const next = new Set(prev)
-        next.delete(id)
-        return next
-      })
+      setActionInProgress(prev => { const next = new Set(prev); next.delete(id); return next })
     }
   }
 
   const handleApproveAllExact = async () => {
-    const exactPending = queue.filter(
-      item => item.match_type === 'exact' && item.status === 'pending'
-    )
-    if (exactPending.length === 0) return
-    setBulkApproving(true)
+    const count = exactPendingCount
     try {
-      await Promise.all(
-        exactPending.map(item =>
-          fetch(`/api/upgrades/queue/${item.id}/approve`, { method: 'POST' })
-        )
-      )
+      await fetch('/api/upgrades/approve-all-exact', { method: 'POST' })
       setQueue(prev => prev.map(item =>
         item.match_type === 'exact' && item.status === 'pending'
           ? { ...item, status: 'approved' }
           : item
       ))
-    } finally {
-      setBulkApproving(false)
+      toast.success(`Approved ${count} exact matches`)
+    } catch {
+      toast.error('Failed to approve all exact')
+    }
+  }
+
+  const handleDownloadApproved = async () => {
+    try {
+      await fetch('/api/upgrades/download-approved', { method: 'POST' })
+      toast.success(`Download started for ${approvedCount} tracks`)
+    } catch {
+      toast.error('Failed to start downloads')
     }
   }
 
   const totalCandidates = queue.length
   const exactMatches = queue.filter(i => i.match_type === 'exact').length
   const approvedCount = queue.filter(i => i.status === 'approved').length
-  const exactPendingCount = queue.filter(
-    i => i.match_type === 'exact' && i.status === 'pending'
-  ).length
+  const exactPendingCount = queue.filter(i => i.match_type === 'exact' && i.status === 'pending').length
 
-  const tabs: { key: FilterTab; label: string }[] = [
-    { key: 'all', label: 'All' },
-    { key: 'pending', label: 'Pending' },
-    { key: 'approved', label: 'Approved' },
-    { key: 'completed', label: 'Completed' },
-    { key: 'skipped', label: 'Skipped' },
+  const tabs: { key: FilterTab; label: string; count: number }[] = [
+    { key: 'all', label: 'All', count: queue.length },
+    { key: 'pending', label: 'Pending', count: queue.filter(i => i.status === 'pending').length },
+    { key: 'approved', label: 'Approved', count: approvedCount },
+    { key: 'completed', label: 'Completed', count: queue.filter(i => i.status === 'completed').length },
+    { key: 'skipped', label: 'Skipped', count: queue.filter(i => i.status === 'skipped').length },
   ]
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Upgrades</h2>
+        <h2 className="text-2xl font-bold font-[family-name:var(--font-family-display)]">Upgrades</h2>
         <div className="flex gap-3">
-          {exactPendingCount > 0 && (
-            <button
-              onClick={handleApproveAllExact}
-              disabled={bulkApproving}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-700 disabled:text-zinc-500 rounded-lg text-sm font-medium transition-colors"
-            >
-              {bulkApproving
-                ? 'Approving...'
-                : `Approve All Exact (${exactPendingCount})`}
-            </button>
+          {approvedCount > 0 && (
+            <Button variant="primary" onClick={handleDownloadApproved}>
+              <Download className="w-4 h-4" />
+              Download Approved ({approvedCount})
+            </Button>
           )}
-          <button
-            onClick={handleScan}
-            disabled={scanning}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:text-zinc-500 rounded-lg text-sm font-medium transition-colors"
-          >
-            {scanning ? 'Scanning...' : 'Find Upgrades'}
-          </button>
+          {exactPendingCount > 0 && (
+            <Button variant="secondary" onClick={handleApproveAllExact}>
+              <CheckCircle className="w-4 h-4" />
+              Approve All Exact ({exactPendingCount})
+            </Button>
+          )}
+          <Button variant="secondary" onClick={handleScan} disabled={scanning}>
+            <Search className="w-4 h-4" />
+            {scanning ? 'Searching...' : 'Find Upgrades'}
+          </Button>
         </div>
       </div>
 
+      {scanning && upgradeStatus.running && (
+        <GlassCard className="p-5">
+          <ProgressBar
+            value={upgradeStatus.progress}
+            max={upgradeStatus.total}
+            label="Searching for upgrades..."
+            detail={upgradeStatus.current_query || `${upgradeStatus.progress}/${upgradeStatus.total}`}
+          />
+        </GlassCard>
+      )}
+
       <div className="grid grid-cols-3 gap-4">
-        {[
-          ['Candidates', totalCandidates.toLocaleString()],
-          ['Exact Matches', exactMatches.toLocaleString()],
-          ['Approved', approvedCount.toLocaleString()],
-        ].map(([label, value]) => (
-          <div
-            key={label}
-            className="bg-zinc-900 rounded-xl p-5 border border-zinc-800"
-          >
-            <div className="text-sm text-zinc-500 mb-1">{label}</div>
-            <div className="text-2xl font-bold">{value}</div>
-          </div>
-        ))}
+        <StatCard icon={ArrowUpCircle} label="Candidates" value={totalCandidates.toLocaleString()} />
+        <StatCard icon={CheckCircle} label="Exact Matches" value={exactMatches.toLocaleString()} />
+        <StatCard icon={Download} label="Approved" value={approvedCount.toLocaleString()} />
       </div>
 
       <div className="flex gap-2">
@@ -191,100 +194,101 @@ export default function Upgrades() {
           <button
             key={tab.key}
             onClick={() => setFilterTab(tab.key)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
               filterTab === tab.key
-                ? 'bg-zinc-800 text-white'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                ? 'bg-lime-dim text-lime border border-lime/20'
+                : 'text-base-400 hover:text-white hover:bg-base-700/50'
             }`}
           >
             {tab.label}
+            {tab.count > 0 && (
+              <span className="text-xs opacity-60">{tab.count}</span>
+            )}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <div className="text-zinc-500">Loading...</div>
+        <SkeletonTable rows={6} cols={7} />
       ) : queue.length === 0 ? (
-        <div className="text-zinc-500">
-          No upgrade candidates found. Click Find Upgrades to scan your library.
-        </div>
+        <EmptyState
+          icon={ArrowUpCircle}
+          title="No upgrades found"
+          description="Click Find Upgrades to scan your library for quality improvements."
+        />
       ) : (
-        <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+        <GlassCard className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-zinc-800 text-zinc-400 text-left">
+                <tr className="border-b border-glass-border text-base-400 text-left">
                   <th className="px-4 py-3 font-medium">Artist</th>
                   <th className="px-4 py-3 font-medium">Album</th>
                   <th className="px-4 py-3 font-medium">Title</th>
                   <th className="px-4 py-3 font-medium">Format</th>
-                  <th className="px-4 py-3 font-medium">Bitrate</th>
                   <th className="px-4 py-3 font-medium text-center">Match</th>
                   <th className="px-4 py-3 font-medium text-center">Status</th>
                   <th className="px-4 py-3 font-medium text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {queue.map(item => {
-                  const busy = actionInProgress.has(item.id)
-                  const canAct = item.status === 'pending'
-                  return (
-                    <tr
-                      key={item.id}
-                      className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors"
-                    >
-                      <td className="px-4 py-3">{item.artist || '--'}</td>
-                      <td className="px-4 py-3 text-zinc-400">
-                        {item.album || '--'}
-                      </td>
-                      <td className="px-4 py-3">{item.title || '--'}</td>
-                      <td className="px-4 py-3 uppercase font-mono">
-                        {item.format}
-                      </td>
-                      <td className="px-4 py-3 font-mono">
-                        {item.bitrate > 0 ? `${item.bitrate} kbps` : '--'}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${matchBadgeClass(item.match_type)}`}
-                        >
-                          {item.match_type ?? 'pending'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${statusBadgeClass(item.status)}`}
-                        >
-                          {item.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {canAct && (
-                          <div className="flex gap-2 justify-end">
-                            <button
-                              onClick={() => handleApprove(item.id)}
-                              disabled={busy}
-                              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:text-zinc-500 rounded text-xs font-medium transition-colors"
-                            >
-                              {busy ? '...' : 'Approve'}
-                            </button>
-                            <button
-                              onClick={() => handleSkip(item.id)}
-                              disabled={busy}
-                              className="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:text-zinc-600 rounded text-xs font-medium transition-colors"
-                            >
-                              {busy ? '...' : 'Skip'}
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
+              <AnimatePresence>
+                <tbody>
+                  {queue.map(item => {
+                    const busy = actionInProgress.has(item.id)
+                    const canAct = item.status === 'pending'
+                    const justApproved = recentlyApproved.has(item.id)
+                    return (
+                      <motion.tr
+                        key={item.id}
+                        layout
+                        initial={{ opacity: 0 }}
+                        animate={{
+                          opacity: 1,
+                          backgroundColor: justApproved ? 'rgba(204, 255, 0, 0.05)' : 'transparent',
+                        }}
+                        exit={{ opacity: 0, x: -20 }}
+                        className="border-b border-glass-border/50 hover:bg-base-800/30 transition-colors"
+                      >
+                        <td className="px-4 py-3">{item.artist || '--'}</td>
+                        <td className="px-4 py-3 text-base-400">{item.album || '--'}</td>
+                        <td className="px-4 py-3">{item.title || '--'}</td>
+                        <td className="px-4 py-3 uppercase font-mono text-xs">{item.format} {item.bitrate > 0 ? `${item.bitrate}k` : ''}</td>
+                        <td className="px-4 py-3 text-center">
+                          <Badge variant={matchVariant(item.match_type)}>{item.match_type ?? 'pending'}</Badge>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <Badge variant={statusVariant(item.status)}>{item.status}</Badge>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {canAct && (
+                            <div className="flex gap-2 justify-end">
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                onClick={() => handleApprove(item.id, item.artist, item.title)}
+                                disabled={busy}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleSkip(item.id, item.artist, item.title)}
+                                disabled={busy}
+                              >
+                                <XCircle className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          )}
+                        </td>
+                      </motion.tr>
+                    )
+                  })}
+                </tbody>
+              </AnimatePresence>
             </table>
           </div>
-        </div>
+        </GlassCard>
       )}
     </div>
   )

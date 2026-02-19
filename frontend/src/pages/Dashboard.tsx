@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import { Music, HardDrive, Copy, ArrowUpCircle } from 'lucide-react'
 import { useScanProgress } from '../hooks/useScanProgress'
+import { GlassCard, StatCard, Button, ProgressBar, Skeleton, toast } from '../components/ui'
+import { apiGet } from '../lib/api'
 
 interface Stats {
   total_tracks: number
@@ -11,91 +14,107 @@ interface Stats {
   upgrades_pending: number
 }
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
+const COLORS = ['#CCFF00', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981']
 
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
-  const progress = useScanProgress()
+  const [loading, setLoading] = useState(true)
+
+  const fetchStats = useCallback(() => {
+    apiGet<Stats>('/api/stats/')
+      .then(setStats)
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const progress = useScanProgress(fetchStats)
 
   useEffect(() => {
-    fetch('/api/stats/').then(r => r.json()).then(setStats)
-  }, [])
+    fetchStats()
+  }, [fetchStats])
 
   const startScan = async () => {
     await fetch('/api/scan/start', { method: 'POST' })
+    toast.success('Scan started')
   }
 
-  if (!stats) return <div className="text-zinc-500">Loading...</div>
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-8 w-48" />
+        <div className="grid grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 rounded-2xl" />)}
+        </div>
+        <Skeleton className="h-72 rounded-2xl" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Library Overview</h2>
-        <button
-          onClick={startScan}
-          disabled={progress.running}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:text-zinc-500 rounded-lg text-sm font-medium transition-colors"
-        >
+        <h2 className="text-2xl font-bold font-[family-name:var(--font-family-display)]">Library Overview</h2>
+        <Button onClick={startScan} disabled={progress.running}>
           {progress.running ? 'Scanning...' : 'Scan Now'}
-        </button>
+        </Button>
       </div>
 
       {progress.running && (
-        <div className="bg-zinc-900 rounded-xl p-5 border border-zinc-800">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-medium">Scanning...</h3>
-            <span className="text-sm text-zinc-400">
-              {progress.progress.toLocaleString()} / {progress.total.toLocaleString()}
-            </span>
-          </div>
-          <div className="w-full bg-zinc-800 rounded-full h-2">
-            <div
-              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${progress.total > 0 ? (progress.progress / progress.total) * 100 : 0}%` }}
-            />
-          </div>
-          <p className="text-xs text-zinc-500 mt-2 truncate">{progress.current_file}</p>
-        </div>
+        <GlassCard className="p-5">
+          <ProgressBar
+            value={progress.progress}
+            max={progress.total}
+            label="Scanning library..."
+            detail={`${progress.progress.toLocaleString()} / ${progress.total.toLocaleString()}`}
+          />
+          <p className="text-xs text-base-500 mt-2 truncate">{progress.current_file}</p>
+        </GlassCard>
       )}
 
-      <div className="grid grid-cols-4 gap-4">
-        {[
-          ['Total Tracks', stats.total_tracks.toLocaleString()],
-          ['Library Size', `${stats.total_size_gb} GB`],
-          ['Dupes Found', stats.dupe_groups_unresolved.toString()],
-          ['Upgrades Pending', stats.upgrades_pending.toString()],
-        ].map(([label, value]) => (
-          <div key={label} className="bg-zinc-900 rounded-xl p-5 border border-zinc-800">
-            <div className="text-sm text-zinc-500 mb-1">{label}</div>
-            <div className="text-2xl font-bold">{value}</div>
+      {stats && (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard icon={Music} label="Total Tracks" value={stats.total_tracks.toLocaleString()} />
+            <StatCard icon={HardDrive} label="Library Size" value={`${stats.total_size_gb} GB`} />
+            <StatCard icon={Copy} label="Dupes Found" value={stats.dupe_groups_unresolved.toString()} />
+            <StatCard icon={ArrowUpCircle} label="Upgrades Pending" value={stats.upgrades_pending.toString()} />
           </div>
-        ))}
-      </div>
 
-      {stats.formats.length > 0 && (
-        <div className="bg-zinc-900 rounded-xl p-5 border border-zinc-800">
-          <h3 className="text-lg font-semibold mb-4">Format Breakdown</h3>
-          <div className="h-64">
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie
-                  data={stats.formats}
-                  dataKey="count"
-                  nameKey="format"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  label={({ name, value }: { name?: string; value?: number }) => `${(name ?? '').toUpperCase()} (${value ?? 0})`}
-                >
-                  {stats.formats.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+          {stats.formats.length > 0 && (
+            <GlassCard className="p-6">
+              <h3 className="text-lg font-semibold font-[family-name:var(--font-family-display)] mb-4">Format Breakdown</h3>
+              <div className="h-64">
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie
+                      data={stats.formats}
+                      dataKey="count"
+                      nameKey="format"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={100}
+                      innerRadius={60}
+                      strokeWidth={0}
+                      label={({ name, value }: { name?: string; value?: number }) => `${(name ?? '').toUpperCase()} (${value ?? 0})`}
+                    >
+                      {stats.formats.map((_, i) => (
+                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        background: 'rgba(17, 22, 39, 0.9)',
+                        border: '1px solid rgba(90, 101, 133, 0.3)',
+                        borderRadius: '12px',
+                        color: '#e2e8f0',
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </GlassCard>
+          )}
+        </>
       )}
     </div>
   )

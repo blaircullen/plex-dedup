@@ -1,1 +1,53 @@
 @import "tailwindcss";
+
+@theme {
+  --color-base-900: #0a0e1a;
+  --color-base-800: #111627;
+  --color-base-700: #1a2035;
+  --color-base-600: #252d45;
+  --color-base-500: #3a4463;
+  --color-base-400: #5a6585;
+  --color-base-300: #8891ab;
+  --color-glass: rgba(17, 22, 39, 0.6);
+  --color-glass-border: rgba(90, 101, 133, 0.2);
+  --color-glass-hover: rgba(26, 32, 53, 0.8);
+  --color-lime: #CCFF00;
+  --color-lime-dim: rgba(204, 255, 0, 0.15);
+  --color-lime-glow: rgba(204, 255, 0, 0.3);
+  --font-family-display: 'Syne', sans-serif;
+  --font-family-body: 'Outfit', sans-serif;
+}
+
+body {
+  font-family: var(--font-family-body);
+  background: var(--color-base-900);
+  color: #e2e8f0;
+  min-height: 100vh;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(204, 255, 0, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(59, 130, 246, 0.03) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, var(--color-base-800) 25%, var(--color-base-700) 50%, var(--color-base-800) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}

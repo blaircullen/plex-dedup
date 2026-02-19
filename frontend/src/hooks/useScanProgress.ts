@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 
 interface ScanProgress {
   running: boolean
@@ -7,11 +7,22 @@ interface ScanProgress {
   current_file: string
 }
 
-export function useScanProgress() {
+export function useScanProgress(onComplete?: () => void) {
   const [progress, setProgress] = useState<ScanProgress>({
     running: false, progress: 0, total: 0, current_file: ''
   })
   const wsRef = useRef<WebSocket | null>(null)
+  const wasRunningRef = useRef(false)
+  const onCompleteRef = useRef(onComplete)
+  onCompleteRef.current = onComplete
+
+  const handleMessage = useCallback((data: ScanProgress) => {
+    setProgress(data)
+    if (wasRunningRef.current && !data.running) {
+      onCompleteRef.current?.()
+    }
+    wasRunningRef.current = data.running
+  }, [])
 
   useEffect(() => {
     const connect = () => {
@@ -21,8 +32,8 @@ export function useScanProgress() {
 
       ws.onmessage = (e) => {
         try {
-          setProgress(JSON.parse(e.data))
-        } catch {}
+          handleMessage(JSON.parse(e.data))
+        } catch { /* ignore parse errors */ }
       }
 
       ws.onclose = () => {
@@ -34,10 +45,12 @@ export function useScanProgress() {
       }
     }
 
-    // Fetch initial status
     fetch('/api/scan/status')
       .then(r => r.json())
-      .then(setProgress)
+      .then((data: ScanProgress) => {
+        setProgress(data)
+        wasRunningRef.current = data.running
+      })
       .catch(() => {})
 
     connect()
@@ -45,7 +58,7 @@ export function useScanProgress() {
     return () => {
       wsRef.current?.close()
     }
-  }, [])
+  }, [handleMessage])
 
   return progress
 }
