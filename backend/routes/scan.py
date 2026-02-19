@@ -54,42 +54,39 @@ def run_scan(music_path: Path):
     scan_status["running"] = True
     scan_status["progress"] = 0
 
-    # Fast file count — just check extensions, no metadata reads
-    total = 0
-    for dirpath, _, filenames in os.walk(music_path):
-        for f in filenames:
-            if Path(f).suffix.lower() in AUDIO_EXTENSIONS:
-                total += 1
-    scan_status["total"] = total
+    try:
+        # Fast file count — just check extensions, no metadata reads
+        total = 0
+        for dirpath, _, filenames in os.walk(music_path):
+            for f in filenames:
+                if Path(f).suffix.lower() in AUDIO_EXTENSIONS:
+                    total += 1
+        scan_status["total"] = total
 
-    with get_db() as db:
-        for i, meta in enumerate(scan_directory(music_path)):
-            scan_status["progress"] = i + 1
-            scan_status["current_file"] = meta["file_path"]
+        with get_db() as db:
+            for i, meta in enumerate(scan_directory(music_path)):
+                scan_status["progress"] = i + 1
+                scan_status["current_file"] = meta["file_path"]
 
-            if (i + 1) % 10 == 0 or i + 1 == total:
-                _broadcast_sync(dict(scan_status))
+                existing = db.execute(
+                    "SELECT id FROM tracks WHERE file_path = ?", (meta["file_path"],)
+                ).fetchone()
+                if existing:
+                    continue
 
-            existing = db.execute(
-                "SELECT id FROM tracks WHERE file_path = ?", (meta["file_path"],)
-            ).fetchone()
-            if existing:
-                continue
+                fp = generate_fingerprint(meta["file_path"])
+                meta["fingerprint"] = fp
 
-            fp = generate_fingerprint(meta["file_path"])
-            meta["fingerprint"] = fp
-
-            db.execute("""
-                INSERT INTO tracks (file_path, file_size, format, bitrate, bit_depth,
-                    sample_rate, duration, artist, album_artist, album, title,
-                    track_number, disc_number, fingerprint)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                meta["file_path"], meta["file_size"], meta["format"], meta["bitrate"],
-                meta["bit_depth"], meta["sample_rate"], meta["duration"], meta["artist"],
-                meta["album_artist"], meta["album"], meta["title"], meta["track_number"],
-                meta["disc_number"], meta["fingerprint"]
-            ))
-
-    scan_status["running"] = False
-    _broadcast_sync(dict(scan_status))
+                db.execute("""
+                    INSERT INTO tracks (file_path, file_size, format, bitrate, bit_depth,
+                        sample_rate, duration, artist, album_artist, album, title,
+                        track_number, disc_number, fingerprint)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    meta["file_path"], meta["file_size"], meta["format"], meta["bitrate"],
+                    meta["bit_depth"], meta["sample_rate"], meta["duration"], meta["artist"],
+                    meta["album_artist"], meta["album"], meta["title"], meta["track_number"],
+                    meta["disc_number"], meta["fingerprint"]
+                ))
+    finally:
+        scan_status["running"] = False
