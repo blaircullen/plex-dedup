@@ -1,13 +1,15 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from database import init_db
 
-app = FastAPI(title="plex-dedup", version="0.1.0")
-
-@app.on_event("startup")
-def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     init_db()
+    yield
+
+app = FastAPI(title="plex-dedup", version="0.1.0", lifespan=lifespan)
 
 @app.get("/api/health")
 def health():

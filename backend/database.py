@@ -3,10 +3,11 @@ from pathlib import Path
 from contextlib import contextmanager
 import os
 
-DB_PATH = Path(os.environ.get("DB_PATH", "plex-dedup.db"))
+DB_PATH = Path(os.environ.get("DB_PATH", "/data/plex-dedup.db"))
 
 def init_db():
     with get_db() as db:
+        db.execute("PRAGMA journal_mode=WAL")
         db.executescript("""
             CREATE TABLE IF NOT EXISTS tracks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,7 +73,6 @@ def init_db():
 def get_db():
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     try:
         yield conn
