@@ -1,0 +1,17 @@
+services:
+  plex-dedup:
+    build: .
+    container_name: plex-dedup
+    ports:
+      - "8686:8686"
+    volumes:
+      - ./data:/data
+      - /mnt/music:/music:ro
+      - /mnt/music-trash:/trash
+      - ./staging:/staging
+    environment:
+      - MUSIC_PATH=/music
+      - TRASH_PATH=/trash
+      - STAGING_PATH=/staging
+      - DB_PATH=/data/plex-dedup.db
+    restart: unless-stopped
