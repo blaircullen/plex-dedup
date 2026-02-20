@@ -18,21 +18,27 @@ router = APIRouter(prefix="/api/upgrades", tags=["upgrades"])
 upgrade_status = {"running": False, "progress": 0, "total": 0, "current": "", "phase": "idle"}
 
 
+UPGRADE_SCAN_FOLDERS = ["/music/mp3s/", "/music/iTunes/"]
+
+
 @router.get("/candidates")
 def get_upgrade_candidates():
     """Find lossy tracks that could be upgraded to FLAC."""
+    path_filters = " OR ".join(["t.file_path LIKE ?" for _ in UPGRADE_SCAN_FOLDERS])
+    path_params = [f"{folder}%" for folder in UPGRADE_SCAN_FOLDERS]
     with get_db() as db:
-        candidates = db.execute("""
+        candidates = db.execute(f"""
             SELECT t.* FROM tracks t
             WHERE t.format IN ('mp3', 'aac', 'ogg', 'm4a')
             AND t.status = 'active'
+            AND ({path_filters})
             AND t.id NOT IN (
                 SELECT dgm.track_id FROM dupe_group_members dgm
                 JOIN dupe_groups dg ON dgm.group_id = dg.id
                 WHERE dg.resolved = 1
             )
             ORDER BY t.artist, t.album, t.track_number
-        """).fetchall()
+        """, path_params).fetchall()
     return [dict(c) for c in candidates]
 
 
@@ -50,12 +56,15 @@ async def scan_for_upgrades(background_tasks: BackgroundTasks):
             WHERE status IN ('failed', 'skipped')
         """)
 
-        candidates = db.execute("""
+        path_filters = " OR ".join(["file_path LIKE ?" for _ in UPGRADE_SCAN_FOLDERS])
+        path_params = [f"{folder}%" for folder in UPGRADE_SCAN_FOLDERS]
+        candidates = db.execute(f"""
             SELECT * FROM tracks
             WHERE format IN ('mp3', 'aac', 'ogg', 'm4a')
             AND status = 'active'
+            AND ({path_filters})
             AND id NOT IN (SELECT track_id FROM upgrade_queue)
-        """).fetchall()
+        """, path_params).fetchall()
 
         for c in candidates:
             query = build_search_query(dict(c))
