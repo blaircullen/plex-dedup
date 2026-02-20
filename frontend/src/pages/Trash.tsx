@@ -61,11 +61,17 @@ export default function Trash() {
   const handleEmpty = async () => {
     setShowConfirm(false)
     try {
-      await fetch('/api/trash/empty', { method: 'POST' })
-      toast.success('Trash emptied')
+      const res = await fetch('/api/trash/empty', { method: 'POST' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        toast.error(err?.detail || `Failed to empty trash (${res.status})`)
+        return
+      }
+      const data = await res.json()
+      toast.success(`Trash emptied — ${data.deleted} file${data.deleted !== 1 ? 's' : ''} deleted`)
       fetchData()
     } catch {
-      toast.error('Failed to empty trash')
+      toast.error('Failed to empty trash — network error')
     }
   }
 

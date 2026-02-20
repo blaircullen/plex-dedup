@@ -38,7 +38,11 @@ def restore(action_id: int):
 @router.post("/empty")
 def empty():
     trash_dir = Path(os.environ.get("TRASH_PATH", "/trash"))
-    count = empty_trash(trash_dir)
+    try:
+        count = empty_trash(trash_dir)
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"Failed to delete files: {e}")
     with get_db() as db:
         db.execute("UPDATE tracks SET status = 'deleted' WHERE status = 'trashed'")
     return {"deleted": count}
