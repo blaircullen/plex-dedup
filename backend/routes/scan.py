@@ -107,7 +107,7 @@ def run_scan(music_path: Path):
                     result = find_duplicates(group)
                     cursor = db2.execute(
                         "INSERT INTO dupe_groups (match_type, confidence, kept_track_id) VALUES (?, ?, ?)",
-                        ("metadata", 0.0, result["keep_id"])
+                        ("metadata", result["confidence"], result["keep_id"])
                     )
                     group_id = cursor.lastrowid
                     for track in group:

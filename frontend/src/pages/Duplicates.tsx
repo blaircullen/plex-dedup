@@ -106,7 +106,8 @@ export default function Duplicates() {
     const winner = members.find(t => t.id === keepTrackId)
     setResolving(prev => new Set(prev).add(groupId))
     try {
-      await fetch(`/api/dupes/${groupId}/resolve?keep_track_id=${keepTrackId}`, { method: 'POST' })
+      const res = await fetch(`/api/dupes/${groupId}/resolve?keep_track_id=${keepTrackId}`, { method: 'POST' })
+      if (!res.ok) throw new Error(await res.text())
       setDupes(prev => prev.filter(d => d.group.id !== groupId))
       if (expandedId === groupId) setExpandedId(null)
       toast.success(`Resolved: ${winner?.artist} - ${winner?.title} (kept ${winner?.format.toUpperCase()})`)
@@ -120,7 +121,8 @@ export default function Duplicates() {
   const handleResolveAll = async () => {
     setShowBulkModal(false)
     try {
-      await fetch('/api/dupes/resolve-all', { method: 'POST' })
+      const res = await fetch('/api/dupes/resolve-all', { method: 'POST' })
+      if (!res.ok) throw new Error(await res.text())
       toast.success(`Resolved all duplicate groups`)
       await fetchDupes()
     } catch {

@@ -1,0 +1,7 @@
+services:
+  plex-dedup:
+    volumes:
+      - ./data:/data
+      - /mnt/nas_music:/music
+      - /mnt/music_dupes:/trash
+      - ./staging:/staging

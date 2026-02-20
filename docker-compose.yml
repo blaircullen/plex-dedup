@@ -6,7 +6,7 @@ services:
       - "8686:8686"
     volumes:
       - ./data:/data
-      - /mnt/music:/music:ro
+      - /mnt/music:/music
       - /mnt/music-trash:/trash
       - ./staging:/staging
     environment:
