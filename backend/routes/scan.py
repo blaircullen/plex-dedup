@@ -2,6 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, WebSocket
 from database import get_db
 from scanner import scan_directory, generate_fingerprint, AUDIO_EXTENSIONS
 from dedup import group_by_metadata, find_duplicates
+from routes.dupes import auto_resolve_high_confidence
 from pathlib import Path
 import asyncio
 import os
@@ -116,6 +117,9 @@ def run_scan(music_path: Path):
                             (group_id, track["id"])
                         )
             logger.info(f"Auto-analysis found {len(groups)} duplicate groups")
+            auto_resolved = auto_resolve_high_confidence()
+            if auto_resolved > 0:
+                logger.info(f"Auto-resolved {auto_resolved} high-confidence duplicates after scan")
         except Exception as e:
             logger.error(f"Auto duplicate analysis failed: {e}")
     finally:

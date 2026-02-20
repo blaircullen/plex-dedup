@@ -97,8 +97,13 @@ export default function Duplicates() {
   }, [fetchDupes])
 
   const handleAnalyze = async () => {
-    await fetch('/api/dupes/analyze', { method: 'POST' })
-    toast.success('Analysis complete')
+    const res = await fetch('/api/dupes/analyze', { method: 'POST' })
+    const data = await res.json()
+    if (data.auto_resolved > 0) {
+      toast.success(`Analysis complete — ${data.auto_resolved} high-confidence duplicates auto-resolved`)
+    } else {
+      toast.success('Analysis complete')
+    }
     await fetchDupes()
   }
 

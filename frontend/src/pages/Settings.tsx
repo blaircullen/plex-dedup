@@ -7,6 +7,7 @@ interface SettingsData {
   trash_path: string
   fingerprint_threshold: string
   squid_rate_limit: string
+  auto_resolve_threshold: string
 }
 
 export default function Settings() {
@@ -14,6 +15,7 @@ export default function Settings() {
   const [loading, setLoading] = useState(true)
   const [threshold, setThreshold] = useState('0.85')
   const [rateLimit, setRateLimit] = useState('3')
+  const [autoResolve, setAutoResolve] = useState('0.95')
 
   useEffect(() => {
     fetch('/api/settings/')
@@ -22,6 +24,7 @@ export default function Settings() {
         setSettings(data)
         setThreshold(data.fingerprint_threshold)
         setRateLimit(data.squid_rate_limit)
+        setAutoResolve(data.auto_resolve_threshold || '0.95')
         setLoading(false)
       })
       .catch(() => {
@@ -34,6 +37,7 @@ export default function Settings() {
     const data = await apiPut<SettingsData>('/api/settings/', {
       fingerprint_threshold: threshold,
       squid_rate_limit: rateLimit,
+      auto_resolve_threshold: autoResolve,
     })
     setSettings(data)
     toast.success('Settings saved')
@@ -101,6 +105,29 @@ export default function Settings() {
             className="w-full px-4 py-2.5 bg-base-800/50 border border-glass-border rounded-xl text-sm text-white focus:outline-none focus:border-lime/50 focus:ring-1 focus:ring-lime/20 transition-all"
           />
           <p className="text-xs text-base-500 mt-1">Seconds between API requests to squid.wtf</p>
+        </div>
+
+        <div>
+          <label htmlFor="auto-resolve" className="block text-sm font-medium text-base-400 mb-1.5">
+            Auto-Resolve Threshold: {Math.round(parseFloat(autoResolve) * 100)}%
+          </label>
+          <input
+            id="auto-resolve"
+            type="range"
+            min="0"
+            max="1.0"
+            step="0.05"
+            value={autoResolve}
+            onChange={e => setAutoResolve(e.target.value)}
+            className="w-full h-2 bg-base-700 rounded-full appearance-none cursor-pointer accent-lime"
+          />
+          <div className="flex justify-between text-xs text-base-500 mt-1">
+            <span>Off (0%)</span>
+            <span>100% only</span>
+          </div>
+          <p className="text-xs text-base-500 mt-1">
+            Duplicates at or above this confidence are auto-resolved after scan (keeps highest quality). Set to 0 to disable.
+          </p>
         </div>
 
         <div className="pt-2">

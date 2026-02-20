@@ -3,9 +3,44 @@ from database import get_db
 from dedup import group_by_metadata, find_duplicates
 from file_manager import trash_file
 from pathlib import Path
+import logging
 import os
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/dupes", tags=["dupes"])
+
+
+def get_auto_resolve_threshold() -> float:
+    """Get the auto-resolve confidence threshold from settings."""
+    with get_db() as db:
+        row = db.execute("SELECT value FROM settings WHERE key = 'auto_resolve_threshold'").fetchone()
+        return float(row["value"]) if row else 0.95
+
+
+def auto_resolve_high_confidence(threshold: float = None) -> int:
+    """Auto-resolve duplicate groups with confidence >= threshold. Returns count resolved."""
+    if threshold is None:
+        threshold = get_auto_resolve_threshold()
+    if threshold <= 0:
+        return 0
+
+    with get_db() as db:
+        groups = db.execute(
+            "SELECT id, kept_track_id, confidence FROM dupe_groups WHERE resolved = 0 AND confidence >= ?",
+            (threshold,)
+        ).fetchall()
+
+    resolved = 0
+    for g in groups:
+        try:
+            resolve_group(g["id"], g["kept_track_id"])
+            resolved += 1
+        except Exception as e:
+            logger.error(f"Auto-resolve failed for group {g['id']}: {e}")
+
+    if resolved > 0:
+        logger.info(f"Auto-resolved {resolved} duplicate groups (threshold: {threshold*100:.0f}%)")
+    return resolved
 
 @router.post("/analyze")
 def analyze_dupes():
@@ -34,7 +69,8 @@ def analyze_dupes():
                 )
             results.append({"group_id": group_id, **result})
 
-    return {"groups_found": len(results), "results": results}
+    auto_resolved = auto_resolve_high_confidence()
+    return {"groups_found": len(results), "auto_resolved": auto_resolved, "results": results}
 
 @router.get("/")
 def list_dupes(resolved: bool = False):

@@ -7,6 +7,7 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 DEFAULTS = {
     "fingerprint_threshold": "0.85",
     "squid_rate_limit": "3",
+    "auto_resolve_threshold": "0.95",
 }
 
 @router.get("/")
