@@ -31,7 +31,7 @@ export function Sidebar() {
           <Music className="w-4 h-4 text-base-900" />
         </div>
         <span className={`font-[family-name:var(--font-family-display)] font-bold text-lg whitespace-nowrap transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0'}`}>
-          ShoopADupe
+          ShoopDeDupe
         </span>
       </div>
 
@@ -65,7 +65,7 @@ export function Sidebar() {
       </nav>
 
       <div className={`px-5 py-4 border-t border-glass-border text-xs text-base-500 transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0'}`}>
-        ShoopADupe v1.0
+        ShoopDeDupe v1.0
       </div>
     </aside>
   )

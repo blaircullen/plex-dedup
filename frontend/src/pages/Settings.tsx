@@ -136,7 +136,7 @@ export default function Settings() {
       </GlassCard>
 
       <p className="text-center text-xs text-base-500 font-[family-name:var(--font-family-display)]">
-        ShoopADupe v1.0
+        ShoopDeDupe v1.0
       </p>
     </div>
   )

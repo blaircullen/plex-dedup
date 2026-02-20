@@ -49,7 +49,15 @@ async def scan_for_upgrades(background_tasks: BackgroundTasks):
         return {"error": "Upgrade scan already in progress"}
 
     with get_db() as db:
-        # Reset failed/skipped items so they get retried
+        # Remove any queue items outside allowed folders (cleanup from before filtering)
+        path_conditions = " AND ".join([f"t.file_path NOT LIKE '{f}%'" for f in UPGRADE_SCAN_FOLDERS])
+        db.execute(f"""
+            DELETE FROM upgrade_queue WHERE track_id IN (
+                SELECT t.id FROM tracks t WHERE {path_conditions}
+            )
+        """)
+
+        # Reset failed/skipped items (only within allowed folders) so they get retried
         db.execute("""
             UPDATE upgrade_queue
             SET status = 'pending', match_type = NULL, squid_url = NULL

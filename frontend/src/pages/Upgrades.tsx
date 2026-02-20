@@ -86,12 +86,7 @@ export default function Upgrades() {
       fetchQueue()
     }
 
-    // Safety valve: if backend is idle but we still think we're downloading/searching, clear flags
-    if (upgradeStatus.phase === 'idle' && !upgradeStatus.running) {
-      if (downloadRequested) setDownloadRequested(false)
-      if (searchRequested) setSearchRequested(false)
-    }
-  }, [upgradeStatus.phase, upgradeStatus.running, fetchQueue, downloadRequested, searchRequested])
+  }, [upgradeStatus.phase, upgradeStatus.running, fetchQueue])
 
   const handleScan = async () => {
     setSearchRequested(true)
