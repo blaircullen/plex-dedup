@@ -43,6 +43,13 @@ async def scan_for_upgrades(background_tasks: BackgroundTasks):
         return {"error": "Upgrade scan already in progress"}
 
     with get_db() as db:
+        # Reset failed/skipped items so they get retried
+        db.execute("""
+            UPDATE upgrade_queue
+            SET status = 'pending', match_type = NULL, squid_url = NULL
+            WHERE status IN ('failed', 'skipped')
+        """)
+
         candidates = db.execute("""
             SELECT * FROM tracks
             WHERE format IN ('mp3', 'aac', 'ogg', 'm4a')
