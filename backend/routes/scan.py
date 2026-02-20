@@ -1,9 +1,13 @@
 from fastapi import APIRouter, BackgroundTasks, WebSocket
 from database import get_db
 from scanner import scan_directory, generate_fingerprint, AUDIO_EXTENSIONS
+from dedup import group_by_metadata, find_duplicates
 from pathlib import Path
 import asyncio
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/scan", tags=["scan"])
 
@@ -88,5 +92,31 @@ def run_scan(music_path: Path):
                     meta["album_artist"], meta["album"], meta["title"], meta["track_number"],
                     meta["disc_number"], meta["fingerprint"]
                 ))
+        # Auto-run duplicate analysis after scan
+        scan_status["current_file"] = "Analyzing duplicates..."
+        try:
+            with get_db() as db2:
+                rows = db2.execute("SELECT * FROM tracks WHERE status = 'active'").fetchall()
+                tracks = [dict(r) for r in rows]
+                groups = group_by_metadata(tracks)
+
+                db2.execute("DELETE FROM dupe_group_members WHERE group_id IN (SELECT id FROM dupe_groups WHERE resolved = 0)")
+                db2.execute("DELETE FROM dupe_groups WHERE resolved = 0")
+
+                for group in groups:
+                    result = find_duplicates(group)
+                    cursor = db2.execute(
+                        "INSERT INTO dupe_groups (match_type, confidence, kept_track_id) VALUES (?, ?, ?)",
+                        ("metadata", 0.0, result["keep_id"])
+                    )
+                    group_id = cursor.lastrowid
+                    for track in group:
+                        db2.execute(
+                            "INSERT INTO dupe_group_members (group_id, track_id) VALUES (?, ?)",
+                            (group_id, track["id"])
+                        )
+            logger.info(f"Auto-analysis found {len(groups)} duplicate groups")
+        except Exception as e:
+            logger.error(f"Auto duplicate analysis failed: {e}")
     finally:
         scan_status["running"] = False

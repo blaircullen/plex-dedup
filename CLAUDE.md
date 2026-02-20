@@ -23,7 +23,7 @@ Python 3.12, FastAPI, SQLite, React 18, Vite, Tailwind CSS
   - `routes/` — FastAPI routers (scan, dupes, trash, stats, upgrades, settings)
 - `frontend/` — React SPA (Vite + Tailwind)
   - `pages/` — Dashboard, Duplicates, Upgrades, Trash, Settings
-  - `hooks/` — useScanProgress (WebSocket)
+  - `hooks/` — useScanProgress (polling), useUpgradeStatus (polling), ScanContext
 
 ## Docker
 - Single container, multi-stage build (Node frontend → Python backend)
@@ -37,3 +37,7 @@ Python 3.12, FastAPI, SQLite, React 18, Vite, Tailwind CSS
 - quality_score: lossless +10000 base, bit_depth * 100, sample_rate / 100, bitrate
 - normalize_text: lowercase, strip punctuation, collapse whitespace, remove leading "the"
 - Dedup groups by (normalized_artist, normalized_title, normalized_album)
+- Scan auto-runs dupe analysis on completion — no separate analyze step needed
+- All background tasks (scan, search, download) use try/finally to reset status
+- Frontend uses polling (2s) not WebSocket for progress — WebSocket can't push from threadpool
+- Pre-validate before spawning background tasks — fast tasks finish before polling catches them

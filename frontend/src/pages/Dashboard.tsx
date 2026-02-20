@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { Music, HardDrive, Copy, ArrowUpCircle, Loader2 } from 'lucide-react'
 import { useScan } from '../hooks/ScanContext'
@@ -28,9 +28,19 @@ export default function Dashboard() {
       .finally(() => setLoading(false))
   }, [])
 
+  const wasRunningRef = useRef(false)
+
   useEffect(() => {
     fetchStats()
   }, [fetchStats])
+
+  // Refresh stats when scan completes (includes auto dupe analysis)
+  useEffect(() => {
+    if (wasRunningRef.current && !scan.running) {
+      fetchStats()
+    }
+    wasRunningRef.current = scan.running
+  }, [scan.running, fetchStats])
 
   const startScan = async () => {
     try {

@@ -85,7 +85,13 @@ export default function Upgrades() {
       setSearchRequested(false)
       fetchQueue()
     }
-  }, [upgradeStatus.phase, fetchQueue])
+
+    // Safety valve: if backend is idle but we still think we're downloading/searching, clear flags
+    if (upgradeStatus.phase === 'idle' && !upgradeStatus.running) {
+      if (downloadRequested) setDownloadRequested(false)
+      if (searchRequested) setSearchRequested(false)
+    }
+  }, [upgradeStatus.phase, upgradeStatus.running, fetchQueue, downloadRequested, searchRequested])
 
   const handleScan = async () => {
     setSearchRequested(true)
@@ -101,7 +107,12 @@ export default function Upgrades() {
   const handleApprove = async (id: number, artist: string, title: string) => {
     setActionInProgress(prev => new Set(prev).add(id))
     try {
-      await fetch(`/api/upgrades/queue/${id}/approve`, { method: 'POST' })
+      const res = await fetch(`/api/upgrades/queue/${id}/approve`, { method: 'POST' })
+      const data = await res.json()
+      if (data.error) {
+        toast.error(data.error)
+        return
+      }
       setQueue(prev => prev.map(item =>
         item.id === id ? { ...item, status: 'approved' } : item
       ))
@@ -146,8 +157,14 @@ export default function Upgrades() {
   const handleDownloadApproved = async () => {
     setDownloadRequested(true)
     try {
-      await fetch('/api/upgrades/download-approved', { method: 'POST' })
-      toast.success(`Download started for ${approvedCount} tracks`)
+      const res = await fetch('/api/upgrades/download-approved', { method: 'POST' })
+      const data = await res.json()
+      if (data.error) {
+        setDownloadRequested(false)
+        toast.error(data.error)
+        return
+      }
+      toast.success(`Download started for ${data.count} tracks`)
     } catch {
       setDownloadRequested(false)
       toast.error('Failed to start downloads')

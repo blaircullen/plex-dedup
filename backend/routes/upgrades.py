@@ -90,6 +90,13 @@ def get_queue(status: str = None):
 @router.post("/queue/{item_id}/approve")
 def approve_upgrade(item_id: int):
     with get_db() as db:
+        row = db.execute(
+            "SELECT squid_url FROM upgrade_queue WHERE id = ?", (item_id,)
+        ).fetchone()
+        if not row:
+            return {"error": "Item not found"}
+        if not row["squid_url"] or row["squid_url"] == "None":
+            return {"error": "Cannot approve: no download URL found. Run search first."}
         db.execute("UPDATE upgrade_queue SET status = 'approved' WHERE id = ?", (item_id,))
     return {"status": "approved"}
 
@@ -103,10 +110,12 @@ def skip_upgrade(item_id: int):
 
 @router.post("/approve-all-exact")
 def approve_all_exact():
-    """Approve all queued items with exact matches."""
+    """Approve all queued items with exact matches that have valid download URLs."""
     with get_db() as db:
         result = db.execute(
-            "UPDATE upgrade_queue SET status = 'approved' WHERE match_type = 'exact' AND status = 'pending'"
+            "UPDATE upgrade_queue SET status = 'approved' "
+            "WHERE match_type = 'exact' AND status = 'pending' "
+            "AND squid_url IS NOT NULL AND squid_url != 'None'"
         )
         count = result.rowcount
     return {"approved": count}
@@ -115,8 +124,22 @@ def approve_all_exact():
 @router.post("/download-approved")
 async def download_approved(background_tasks: BackgroundTasks):
     """Start downloading all approved upgrades."""
+    if upgrade_status["running"]:
+        return {"error": "Upgrade already in progress"}
+
+    with get_db() as db:
+        count = db.execute("""
+            SELECT COUNT(*) FROM upgrade_queue
+            WHERE status = 'approved'
+              AND squid_url IS NOT NULL
+              AND squid_url != 'None'
+        """).fetchone()[0]
+
+    if count == 0:
+        return {"error": "No approved items with valid download URLs", "count": 0}
+
     background_tasks.add_task(run_downloads)
-    return {"status": "started"}
+    return {"status": "started", "count": count}
 
 
 def run_upgrade_search():
