@@ -8,6 +8,7 @@ DEFAULTS = {
     "fingerprint_threshold": "0.85",
     "squid_rate_limit": "3",
     "auto_resolve_threshold": "0.95",
+    "upgrade_scan_folders": "",
 }
 
 @router.get("/")

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { Copy, Search, Trash2, ChevronRight } from 'lucide-react'
+import { Copy, Search, Trash2, ChevronRight, Loader2 } from 'lucide-react'
 import { GlassCard, Button, Badge, EmptyState, SkeletonTable, Modal, toast } from '../components/ui'
 
 interface Track {
@@ -76,6 +76,8 @@ export default function Duplicates() {
   const [sortKey, setSortKey] = useState<SortKey>('confidence')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [showBulkModal, setShowBulkModal] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [resolvingAll, setResolvingAll] = useState(false)
 
   const fetchDupes = useCallback(async () => {
     setLoading(true)
@@ -97,14 +99,21 @@ export default function Duplicates() {
   }, [fetchDupes])
 
   const handleAnalyze = async () => {
-    const res = await fetch('/api/dupes/analyze', { method: 'POST' })
-    const data = await res.json()
-    if (data.auto_resolved > 0) {
-      toast.success(`Analysis complete — ${data.auto_resolved} high-confidence duplicates auto-resolved`)
-    } else {
-      toast.success('Analysis complete')
+    setAnalyzing(true)
+    try {
+      const res = await fetch('/api/dupes/analyze', { method: 'POST' })
+      const data = await res.json()
+      if (data.auto_resolved > 0) {
+        toast.success(`Analysis complete — ${data.auto_resolved} high-confidence duplicates auto-resolved`)
+      } else {
+        toast.success('Analysis complete')
+      }
+      await fetchDupes()
+    } catch {
+      toast.error('Analysis failed')
+    } finally {
+      setAnalyzing(false)
     }
-    await fetchDupes()
   }
 
   const handleResolve = async (groupId: number, keepTrackId: number, members: Track[]) => {
@@ -125,6 +134,7 @@ export default function Duplicates() {
 
   const handleResolveAll = async () => {
     setShowBulkModal(false)
+    setResolvingAll(true)
     try {
       const res = await fetch('/api/dupes/resolve-all', { method: 'POST' })
       if (!res.ok) throw new Error(await res.text())
@@ -132,6 +142,8 @@ export default function Duplicates() {
       await fetchDupes()
     } catch {
       toast.error('Failed to resolve all')
+    } finally {
+      setResolvingAll(false)
     }
   }
 
@@ -166,14 +178,14 @@ export default function Duplicates() {
         <h2 className="text-2xl font-bold font-[family-name:var(--font-family-display)]">Duplicates</h2>
         <div className="flex gap-3">
           {unresolvedCount > 0 && filterTab !== 'resolved' && (
-            <Button variant="danger" onClick={() => setShowBulkModal(true)}>
-              <Trash2 className="w-4 h-4" />
-              Trash All Losers ({unresolvedCount})
+            <Button variant="danger" onClick={() => setShowBulkModal(true)} disabled={resolvingAll}>
+              {resolvingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              {resolvingAll ? 'Resolving...' : `Trash All Losers (${unresolvedCount})`}
             </Button>
           )}
-          <Button variant="secondary" onClick={handleAnalyze}>
-            <Search className="w-4 h-4" />
-            Analyze
+          <Button variant="secondary" onClick={handleAnalyze} disabled={analyzing}>
+            {analyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            {analyzing ? 'Analyzing...' : 'Analyze'}
           </Button>
         </div>
       </div>

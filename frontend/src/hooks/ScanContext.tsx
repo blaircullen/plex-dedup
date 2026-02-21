@@ -6,6 +6,10 @@ interface ScanState {
   progress: number
   total: number
   current_file: string
+  phase: string
+  started_at: number | null
+  stale_removed: number
+  error: boolean
   scanRequested: boolean
   requestScan: () => Promise<void>
 }

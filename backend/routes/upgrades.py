@@ -1,13 +1,15 @@
 from fastapi import APIRouter, BackgroundTasks
 from database import get_db
 from upgrade_service import (
-    build_search_query, find_and_match_track, get_download_url,
-    download_flac, QUALITY_HI_RES,
+    build_search_query, find_and_match_track, find_album_match,
+    get_album_tracks, get_download_url, download_flac, QUALITY_HI_RES,
 )
+from dedup import normalize_text
 from file_manager import trash_file
 from scanner import read_track_metadata
 from pathlib import Path
 import os
+import shutil
 import asyncio
 import logging
 
@@ -18,14 +20,24 @@ router = APIRouter(prefix="/api/upgrades", tags=["upgrades"])
 upgrade_status = {"running": False, "progress": 0, "total": 0, "current": "", "phase": "idle"}
 
 
-UPGRADE_SCAN_FOLDERS = ["/music/mp3s/", "/music/iTunes/"]
+def _get_upgrade_folders() -> list[str]:
+    """Get upgrade scan folders from DB settings, defaulting to all of /music."""
+    with get_db() as db:
+        row = db.execute("SELECT value FROM settings WHERE key = 'upgrade_scan_folders'").fetchone()
+    if row and row["value"]:
+        folders = [f.strip() for f in row["value"].split(",") if f.strip()]
+        if folders:
+            return folders
+    music_path = os.environ.get("MUSIC_PATH", "/music")
+    return [music_path + "/"]
 
 
 @router.get("/candidates")
 def get_upgrade_candidates():
     """Find lossy tracks that could be upgraded to FLAC."""
-    path_filters = " OR ".join(["t.file_path LIKE ?" for _ in UPGRADE_SCAN_FOLDERS])
-    path_params = [f"{folder}%" for folder in UPGRADE_SCAN_FOLDERS]
+    folders = _get_upgrade_folders()
+    path_filters = " OR ".join(["t.file_path LIKE ?" for _ in folders])
+    path_params = [f"{folder}%" for folder in folders]
     with get_db() as db:
         candidates = db.execute(f"""
             SELECT t.* FROM tracks t
@@ -48,24 +60,26 @@ async def scan_for_upgrades(background_tasks: BackgroundTasks):
     if upgrade_status["running"]:
         return {"error": "Upgrade scan already in progress"}
 
+    folders = _get_upgrade_folders()
+
     with get_db() as db:
         # Remove any queue items outside allowed folders (cleanup from before filtering)
-        path_conditions = " AND ".join([f"t.file_path NOT LIKE '{f}%'" for f in UPGRADE_SCAN_FOLDERS])
+        path_conditions = " AND ".join([f"t.file_path NOT LIKE '{f}%'" for f in folders])
         db.execute(f"""
             DELETE FROM upgrade_queue WHERE track_id IN (
                 SELECT t.id FROM tracks t WHERE {path_conditions}
             )
         """)
 
-        # Reset failed/skipped items (only within allowed folders) so they get retried
+        # Reset failed/skipped items so they get retried
         db.execute("""
             UPDATE upgrade_queue
             SET status = 'pending', match_type = NULL, squid_url = NULL
             WHERE status IN ('failed', 'skipped')
         """)
 
-        path_filters = " OR ".join(["file_path LIKE ?" for _ in UPGRADE_SCAN_FOLDERS])
-        path_params = [f"{folder}%" for folder in UPGRADE_SCAN_FOLDERS]
+        path_filters = " OR ".join(["file_path LIKE ?" for _ in folders])
+        path_params = [f"{folder}%" for folder in folders]
         candidates = db.execute(f"""
             SELECT * FROM tracks
             WHERE format IN ('mp3', 'aac', 'ogg', 'm4a')
@@ -166,6 +180,44 @@ async def download_approved(background_tasks: BackgroundTasks):
     return {"status": "started", "count": count}
 
 
+async def _find_track_with_cache(
+    artist: str, album: str, title: str, track_number: int,
+    album_cache: dict[tuple[str, str], dict | None], rate_limit: float = 3.0,
+) -> dict | None:
+    """Find a track on Tidal, caching album lookups to avoid redundant API calls."""
+    cache_key = (normalize_text(artist), normalize_text(album))
+
+    if cache_key not in album_cache:
+        album_match = await find_album_match(artist, album, rate_limit)
+        album_cache[cache_key] = album_match
+
+    album_match = album_cache[cache_key]
+    if not album_match:
+        return None
+
+    tracks = await get_album_tracks(album_match["tidal_id"], rate_limit)
+    n_title = normalize_text(title)
+
+    # Try track number + title match first
+    if track_number > 0:
+        for t in tracks:
+            if t["track_number"] == track_number and normalize_text(t["title"]) == n_title:
+                return {**t, "match_type": "exact", "album_tidal_id": album_match["tidal_id"]}
+
+    # Exact title match
+    for t in tracks:
+        if normalize_text(t["title"]) == n_title:
+            return {**t, "match_type": "exact", "album_tidal_id": album_match["tidal_id"]}
+
+    # Fuzzy title match
+    for t in tracks:
+        t_title = normalize_text(t["title"])
+        if n_title in t_title or t_title in n_title:
+            return {**t, "match_type": "fuzzy", "album_tidal_id": album_match["tidal_id"]}
+
+    return None
+
+
 def run_upgrade_search():
     """Background task: search squid.wtf for each pending queue item."""
     upgrade_status["running"] = True
@@ -180,8 +232,8 @@ def run_upgrade_search():
 
     upgrade_status["total"] = len(pending)
 
-    # Group by album to avoid redundant searches
-    searched_albums = {}
+    # Cache album search results to avoid redundant API calls
+    album_cache: dict[tuple[str, str], dict | None] = {}
 
     try:
         for i, item in enumerate(pending):
@@ -189,11 +241,12 @@ def run_upgrade_search():
             upgrade_status["current"] = f"{item['artist']} - {item['title']}"
 
             try:
-                match = asyncio.run(find_and_match_track(
+                match = asyncio.run(_find_track_with_cache(
                     artist=item["artist"],
                     album=item["album"],
                     title=item["title"],
                     track_number=item["track_number"],
+                    album_cache=album_cache,
                     rate_limit=3.0,
                 ))
 
@@ -271,13 +324,14 @@ def run_downloads():
                 if new_meta["format"] != "flac" or new_meta["file_size"] < 1000:
                     raise ValueError("Downloaded file is not a valid FLAC")
 
-                # Move original lossy file to trash
+                # Move FLAC to final location (same dir as original, new extension)
                 original_path = Path(item["file_path"])
-                dest = trash_file(original_path, trash_dir, music_root)
-
-                # Move FLAC to original location (same dir, new extension)
                 flac_dest = original_path.with_suffix(".flac")
-                staging_path.rename(flac_dest)
+                flac_dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(staging_path), str(flac_dest))
+
+                # Move original lossy file to trash (after FLAC is safely in place)
+                dest = trash_file(original_path, trash_dir, music_root)
 
                 # Update database
                 with get_db() as db:
@@ -294,10 +348,11 @@ def run_downloads():
                     db.execute("""
                         INSERT INTO tracks (file_path, file_size, format, bitrate, bit_depth,
                             sample_rate, duration, artist, album_artist, album, title,
-                            track_number, disc_number, status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+                            track_number, disc_number, fingerprint, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
                     """, (
-                        str(flac_dest), new_meta["file_size"], "flac", 0,
+                        str(flac_dest), new_meta["file_size"], "flac",
+                        new_meta.get("bitrate", 0),
                         dl_info["bit_depth"], dl_info["sample_rate"], new_meta["duration"],
                         new_meta["artist"] or item["artist"],
                         new_meta.get("album_artist", ""),
@@ -305,6 +360,7 @@ def run_downloads():
                         new_meta["title"] or item["title"],
                         new_meta["track_number"] or item["track_number"],
                         new_meta.get("disc_number", 1),
+                        new_meta.get("fingerprint", ""),
                     ))
 
                     # Mark queue item complete

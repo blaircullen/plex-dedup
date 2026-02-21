@@ -1,14 +1,15 @@
 import { motion } from 'motion/react'
 
 interface ProgressBarProps {
-  value: number
-  max: number
+  value?: number
+  max?: number
   label?: string
   detail?: string
 }
 
 export function ProgressBar({ value, max, label, detail }: ProgressBarProps) {
-  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
+  const isIndeterminate = value === undefined || max === undefined || max === 0
+  const pct = !isIndeterminate ? Math.min((value / max) * 100, 100) : 0
 
   return (
     <div className="space-y-2">
@@ -19,12 +20,20 @@ export function ProgressBar({ value, max, label, detail }: ProgressBarProps) {
         </div>
       )}
       <div className="w-full h-2 bg-base-800 rounded-full overflow-hidden">
-        <motion.div
-          className="h-full bg-lime rounded-full"
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.4, ease: 'easeOut' }}
-        />
+        {isIndeterminate ? (
+          <motion.div
+            className="h-full w-1/3 bg-lime rounded-full"
+            animate={{ x: ['-100%', '400%'] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        ) : (
+          <motion.div
+            className="h-full bg-lime rounded-full"
+            initial={{ width: 0 }}
+            animate={{ width: `${pct}%` }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+          />
+        )}
       </div>
     </div>
   )

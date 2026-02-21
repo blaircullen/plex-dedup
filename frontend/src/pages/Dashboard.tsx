@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
-import { Music, HardDrive, Copy, ArrowUpCircle, Loader2 } from 'lucide-react'
+import { Music, HardDrive, Copy, ArrowUpCircle, Loader2, AlertTriangle } from 'lucide-react'
 import { useScan } from '../hooks/ScanContext'
 import { GlassCard, StatCard, ProgressBar, Skeleton, toast } from '../components/ui'
 import { apiGet } from '../lib/api'
@@ -15,6 +15,23 @@ interface Stats {
 }
 
 const COLORS = ['#CCFF00', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981']
+
+const PHASE_LABELS: Record<string, string> = {
+  counting: 'Counting files...',
+  scanning: 'Scanning library...',
+  cleaning: 'Removing stale records...',
+  analyzing: 'Analyzing duplicates...',
+  complete: 'Scan complete',
+  idle: 'Idle',
+}
+
+function formatElapsed(startedAt: number | null): string {
+  if (!startedAt) return ''
+  const elapsed = Math.floor(Date.now() / 1000 - startedAt)
+  const mins = Math.floor(elapsed / 60)
+  const secs = elapsed % 60
+  return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`
+}
 
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
@@ -77,20 +94,37 @@ export default function Dashboard() {
         </button>
       </div>
 
+      {scan.error && (
+        <GlassCard className="p-4 border border-red-500/30 bg-red-500/5">
+          <div className="flex items-center gap-2 text-red-400 text-sm">
+            <AlertTriangle className="w-4 h-4" />
+            <span>Unable to reach the backend. Check that the server is running.</span>
+          </div>
+        </GlassCard>
+      )}
+
       {scan.running && (
         <GlassCard className="p-5">
           <ProgressBar
-            value={scan.progress}
-            max={scan.total}
-            label="Scanning library..."
-            detail={scan.total > 0
+            value={scan.phase === 'scanning' ? scan.progress : undefined}
+            max={scan.phase === 'scanning' ? scan.total : undefined}
+            label={PHASE_LABELS[scan.phase] ?? 'Working...'}
+            detail={scan.phase === 'scanning' && scan.total > 0
               ? `${scan.progress.toLocaleString()} / ${scan.total.toLocaleString()}`
+              : scan.phase === 'cleaning' ? 'Checking for removed files...'
+              : scan.phase === 'analyzing' ? 'Finding duplicate groups...'
+              : scan.phase === 'counting' ? 'Counting audio files...'
               : 'Starting...'
             }
           />
-          {scan.current_file && (
-            <p className="text-xs text-base-500 mt-2 truncate">{scan.current_file}</p>
-          )}
+          <div className="flex items-center justify-between mt-2">
+            {scan.current_file && scan.phase === 'scanning' && (
+              <p className="text-xs text-base-500 truncate flex-1 mr-4">{scan.current_file}</p>
+            )}
+            {scan.started_at && (
+              <p className="text-xs text-base-500 whitespace-nowrap">Elapsed: {formatElapsed(scan.started_at)}</p>
+            )}
+          </div>
         </GlassCard>
       )}
 

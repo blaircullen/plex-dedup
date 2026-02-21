@@ -8,6 +8,7 @@ interface SettingsData {
   fingerprint_threshold: string
   squid_rate_limit: string
   auto_resolve_threshold: string
+  upgrade_scan_folders: string
 }
 
 export default function Settings() {
@@ -16,6 +17,7 @@ export default function Settings() {
   const [threshold, setThreshold] = useState('0.85')
   const [rateLimit, setRateLimit] = useState('3')
   const [autoResolve, setAutoResolve] = useState('0.95')
+  const [upgradeFolders, setUpgradeFolders] = useState('')
 
   useEffect(() => {
     fetch('/api/settings/')
@@ -25,6 +27,7 @@ export default function Settings() {
         setThreshold(data.fingerprint_threshold)
         setRateLimit(data.squid_rate_limit)
         setAutoResolve(data.auto_resolve_threshold || '0.95')
+        setUpgradeFolders(data.upgrade_scan_folders || '')
         setLoading(false)
       })
       .catch(() => {
@@ -38,6 +41,7 @@ export default function Settings() {
       fingerprint_threshold: threshold,
       squid_rate_limit: rateLimit,
       auto_resolve_threshold: autoResolve,
+      upgrade_scan_folders: upgradeFolders,
     })
     setSettings(data)
     toast.success('Settings saved')
@@ -105,6 +109,23 @@ export default function Settings() {
             className="w-full px-4 py-2.5 bg-base-800/50 border border-glass-border rounded-xl text-sm text-white focus:outline-none focus:border-lime/50 focus:ring-1 focus:ring-lime/20 transition-all"
           />
           <p className="text-xs text-base-500 mt-1">Seconds between API requests to squid.wtf</p>
+        </div>
+
+        <div>
+          <label htmlFor="upgrade-folders" className="block text-sm font-medium text-base-400 mb-1.5">
+            Upgrade Scan Folders
+          </label>
+          <input
+            id="upgrade-folders"
+            type="text"
+            value={upgradeFolders}
+            onChange={e => setUpgradeFolders(e.target.value)}
+            placeholder="e.g. /music/mp3s/, /music/iTunes/"
+            className="w-full px-4 py-2.5 bg-base-800/50 border border-glass-border rounded-xl text-sm text-white focus:outline-none focus:border-lime/50 focus:ring-1 focus:ring-lime/20 transition-all"
+          />
+          <p className="text-xs text-base-500 mt-1">
+            Comma-separated folder paths to scan for upgrade candidates. Leave empty to scan the entire music library.
+          </p>
         </div>
 
         <div>

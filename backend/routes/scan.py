@@ -6,13 +6,17 @@ from routes.dupes import auto_resolve_high_confidence
 from pathlib import Path
 import asyncio
 import os
+import time
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/scan", tags=["scan"])
 
-scan_status = {"running": False, "progress": 0, "total": 0, "current_file": ""}
+scan_status = {
+    "running": False, "progress": 0, "total": 0, "current_file": "",
+    "phase": "idle", "started_at": None, "stale_removed": 0,
+}
 ws_clients: list[WebSocket] = []
 
 async def broadcast(data: dict):
@@ -58,9 +62,13 @@ def _broadcast_sync(data: dict):
 def run_scan(music_path: Path):
     scan_status["running"] = True
     scan_status["progress"] = 0
+    scan_status["phase"] = "counting"
+    scan_status["started_at"] = time.time()
+    scan_status["stale_removed"] = 0
+    scan_status["current_file"] = ""
 
     try:
-        # Fast file count — just check extensions, no metadata reads
+        # Phase 1: Count files
         total = 0
         for dirpath, _, filenames in os.walk(music_path):
             for f in filenames:
@@ -68,6 +76,8 @@ def run_scan(music_path: Path):
                     total += 1
         scan_status["total"] = total
 
+        # Phase 2: Scan new files
+        scan_status["phase"] = "scanning"
         with get_db() as db:
             for i, meta in enumerate(scan_directory(music_path)):
                 scan_status["progress"] = i + 1
@@ -93,7 +103,27 @@ def run_scan(music_path: Path):
                     meta["album_artist"], meta["album"], meta["title"], meta["track_number"],
                     meta["disc_number"], meta["fingerprint"]
                 ))
-        # Auto-run duplicate analysis after scan
+
+        # Phase 3: Remove stale records (files that no longer exist on disk)
+        scan_status["phase"] = "cleaning"
+        scan_status["current_file"] = "Removing stale records..."
+        stale_count = 0
+        with get_db() as db:
+            active_tracks = db.execute(
+                "SELECT id, file_path FROM tracks WHERE status = 'active'"
+            ).fetchall()
+            for track in active_tracks:
+                if not os.path.exists(track["file_path"]):
+                    db.execute(
+                        "UPDATE tracks SET status = 'deleted' WHERE id = ?", (track["id"],)
+                    )
+                    stale_count += 1
+        if stale_count > 0:
+            logger.info(f"Removed {stale_count} stale track records (files no longer on disk)")
+        scan_status["stale_removed"] = stale_count
+
+        # Phase 4: Analyze duplicates
+        scan_status["phase"] = "analyzing"
         scan_status["current_file"] = "Analyzing duplicates..."
         try:
             with get_db() as db2:
@@ -122,5 +152,7 @@ def run_scan(music_path: Path):
                 logger.info(f"Auto-resolved {auto_resolved} high-confidence duplicates after scan")
         except Exception as e:
             logger.error(f"Auto duplicate analysis failed: {e}")
+
+        scan_status["phase"] = "complete"
     finally:
         scan_status["running"] = False
