@@ -14,7 +14,7 @@ interface Stats {
   upgrades_pending: number
 }
 
-const COLORS = ['#CCFF00', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981']
+const COLORS = ['#6366F1', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981']
 
 const PHASE_LABELS: Record<string, string> = {
   counting: 'Counting files...',
@@ -87,7 +87,7 @@ export default function Dashboard() {
         <button
           onClick={startScan}
           disabled={scan.running}
-          className="px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed bg-lime text-base-900 hover:bg-lime/90"
+          className="px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed bg-lime text-white hover:bg-lime/90"
         >
           {scan.running && <Loader2 className="w-4 h-4 animate-spin" />}
           {scan.running ? 'Scanning...' : 'Scan Now'}
@@ -160,10 +160,11 @@ export default function Dashboard() {
                     </Pie>
                     <Tooltip
                       contentStyle={{
-                        background: 'rgba(17, 22, 39, 0.9)',
-                        border: '1px solid rgba(90, 101, 133, 0.3)',
+                        background: '#FFFFFF',
+                        border: '1px solid #E2E8F0',
                         borderRadius: '12px',
-                        color: '#e2e8f0',
+                        color: '#1E293B',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
                       }}
                     />
                   </PieChart>

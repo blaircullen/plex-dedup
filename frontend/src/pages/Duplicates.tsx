@@ -209,7 +209,7 @@ export default function Duplicates() {
             className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200 ${
               filterTab === tab.key
                 ? 'bg-lime-dim text-lime border border-lime/20'
-                : 'text-base-400 hover:text-white hover:bg-base-700/50'
+                : 'text-base-400 hover:text-base-300 hover:bg-base-700/50'
             }`}
           >
             {tab.label}
@@ -231,17 +231,17 @@ export default function Duplicates() {
             <thead>
               <tr className="border-b border-glass-border text-base-400 text-left">
                 <th className="px-4 py-3 font-medium w-8"></th>
-                <th className="px-4 py-3 font-medium cursor-pointer hover:text-white select-none" onClick={() => toggleSort('artist')}>
+                <th className="px-4 py-3 font-medium cursor-pointer hover:text-base-300 select-none" onClick={() => toggleSort('artist')}>
                   Artist{sortIndicator('artist')}
                 </th>
                 <th className="px-4 py-3 font-medium">Title</th>
                 <th className="px-4 py-3 font-medium">Album</th>
                 <th className="px-4 py-3 font-medium text-center">Members</th>
-                <th className="px-4 py-3 font-medium cursor-pointer hover:text-white select-none text-center" onClick={() => toggleSort('quality_gap')}>
+                <th className="px-4 py-3 font-medium cursor-pointer hover:text-base-300 select-none text-center" onClick={() => toggleSort('quality_gap')}>
                   Quality Gap{sortIndicator('quality_gap')}
                 </th>
                 <th className="px-4 py-3 font-medium text-center">Match</th>
-                <th className="px-4 py-3 font-medium cursor-pointer hover:text-white select-none text-center" onClick={() => toggleSort('confidence')}>
+                <th className="px-4 py-3 font-medium cursor-pointer hover:text-base-300 select-none text-center" onClick={() => toggleSort('confidence')}>
                   Confidence{sortIndicator('confidence')}
                 </th>
                 <th className="px-4 py-3 font-medium text-right">Actions</th>
@@ -335,7 +335,7 @@ function GroupRows({
             className="border-b border-glass-border/50"
           >
             <td colSpan={9} className="p-0">
-              <div className="bg-base-900/50 p-4">
+              <div className="bg-base-700 p-4">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="text-base-500 text-left">

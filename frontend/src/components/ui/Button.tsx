@@ -15,10 +15,10 @@ interface ButtonProps {
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-lime text-base-900 hover:bg-lime/90 font-semibold',
+  primary: 'bg-lime text-white hover:bg-lime/90 font-semibold',
   secondary: 'bg-base-700 text-base-300 hover:bg-base-600 border border-glass-border',
   danger: 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30',
-  ghost: 'text-base-400 hover:text-white hover:bg-base-700/50',
+  ghost: 'text-base-400 hover:text-base-300 hover:bg-base-700/50',
 }
 
 export function Button({ children, variant = 'primary', onClick, disabled, className = '', size = 'md' }: ButtonProps) {

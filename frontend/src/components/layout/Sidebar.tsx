@@ -24,11 +24,11 @@ export function Sidebar() {
     <aside
       onMouseEnter={() => setExpanded(true)}
       onMouseLeave={() => setExpanded(false)}
-      className={`fixed left-0 top-0 h-screen bg-base-800/80 backdrop-blur-xl border-r border-glass-border z-40 flex flex-col transition-all duration-300 ${expanded ? 'w-60' : 'w-[72px]'}`}
+      className={`fixed left-0 top-0 h-screen bg-base-700 border-r border-glass-border z-40 flex flex-col transition-all duration-300 ${expanded ? 'w-60' : 'w-[72px]'}`}
     >
       <div className="flex items-center gap-3 px-5 h-16 border-b border-glass-border shrink-0">
         <div className="w-8 h-8 rounded-lg bg-lime flex items-center justify-center shrink-0">
-          <Music className="w-4 h-4 text-base-900" />
+          <Music className="w-4 h-4 text-white" />
         </div>
         <span className={`font-[family-name:var(--font-family-display)] font-bold text-lg whitespace-nowrap transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0'}`}>
           ShoopDeDupe
@@ -45,7 +45,7 @@ export function Sidebar() {
               `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 relative group ${
                 isActive
                   ? 'text-lime bg-lime-dim'
-                  : 'text-base-400 hover:text-white hover:bg-base-700/50'
+                  : 'text-base-400 hover:text-base-300 hover:bg-base-700/50'
               }`
             }
           >

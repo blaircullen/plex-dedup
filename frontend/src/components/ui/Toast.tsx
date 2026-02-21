@@ -8,19 +8,19 @@ export function Toaster() {
       position="bottom-right"
       toastOptions={{
         style: {
-          background: 'rgba(17, 22, 39, 0.9)',
-          backdropFilter: 'blur(12px)',
-          color: '#e2e8f0',
-          border: '1px solid rgba(90, 101, 133, 0.3)',
+          background: '#FFFFFF',
+          color: '#1E293B',
+          border: '1px solid #E2E8F0',
           borderRadius: '12px',
           fontSize: '14px',
           fontFamily: 'Outfit, sans-serif',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
         },
         success: {
-          iconTheme: { primary: '#CCFF00', secondary: '#0a0e1a' },
+          iconTheme: { primary: '#6366F1', secondary: '#FFFFFF' },
         },
         error: {
-          iconTheme: { primary: '#ef4444', secondary: '#0a0e1a' },
+          iconTheme: { primary: '#ef4444', secondary: '#FFFFFF' },
         },
         duration: 3000,
       }}

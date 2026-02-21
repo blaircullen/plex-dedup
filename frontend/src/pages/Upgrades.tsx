@@ -188,7 +188,7 @@ export default function Upgrades() {
             <button
               onClick={handleDownloadApproved}
               disabled={isDownloading}
-              className="px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 inline-flex items-center gap-2 bg-lime text-base-900 hover:bg-lime/90 disabled:opacity-60"
+              className="px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 inline-flex items-center gap-2 bg-lime text-white hover:bg-lime/90 disabled:opacity-60"
             >
               <Download className="w-4 h-4" />
               Download Approved ({approvedCount})
@@ -273,7 +273,7 @@ export default function Upgrades() {
             className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
               filterTab === tab.key
                 ? 'bg-lime-dim text-lime border border-lime/20'
-                : 'text-base-400 hover:text-white hover:bg-base-700/50'
+                : 'text-base-400 hover:text-base-300 hover:bg-base-700/50'
             }`}
           >
             {tab.label}
@@ -320,7 +320,7 @@ export default function Upgrades() {
                         initial={{ opacity: 0 }}
                         animate={{
                           opacity: 1,
-                          backgroundColor: justApproved ? 'rgba(204, 255, 0, 0.05)' : 'transparent',
+                          backgroundColor: justApproved ? 'rgba(99, 102, 241, 0.06)' : 'transparent',
                         }}
                         exit={{ opacity: 0, x: -20 }}
                         className="border-b border-glass-border/50 hover:bg-base-800/30 transition-colors"

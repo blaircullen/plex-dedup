@@ -106,7 +106,7 @@ export default function Settings() {
             step="1"
             value={rateLimit}
             onChange={e => setRateLimit(e.target.value)}
-            className="w-full px-4 py-2.5 bg-base-800/50 border border-glass-border rounded-xl text-sm text-white focus:outline-none focus:border-lime/50 focus:ring-1 focus:ring-lime/20 transition-all"
+            className="w-full px-4 py-2.5 bg-base-800/50 border border-glass-border rounded-xl text-sm text-base-300 focus:outline-none focus:border-lime/50 focus:ring-1 focus:ring-lime/20 transition-all"
           />
           <p className="text-xs text-base-500 mt-1">Seconds between API requests to squid.wtf</p>
         </div>
@@ -121,7 +121,7 @@ export default function Settings() {
             value={upgradeFolders}
             onChange={e => setUpgradeFolders(e.target.value)}
             placeholder="e.g. /music/mp3s/, /music/iTunes/"
-            className="w-full px-4 py-2.5 bg-base-800/50 border border-glass-border rounded-xl text-sm text-white focus:outline-none focus:border-lime/50 focus:ring-1 focus:ring-lime/20 transition-all"
+            className="w-full px-4 py-2.5 bg-base-800/50 border border-glass-border rounded-xl text-sm text-base-300 focus:outline-none focus:border-lime/50 focus:ring-1 focus:ring-lime/20 transition-all"
           />
           <p className="text-xs text-base-500 mt-1">
             Comma-separated folder paths to scan for upgrade candidates. Leave empty to scan the entire music library.

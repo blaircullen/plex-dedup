@@ -1,19 +1,19 @@
 @import "tailwindcss";
 
 @theme {
-  --color-base-900: #0a0e1a;
-  --color-base-800: #111627;
-  --color-base-700: #1a2035;
-  --color-base-600: #252d45;
-  --color-base-500: #3a4463;
-  --color-base-400: #5a6585;
-  --color-base-300: #8891ab;
-  --color-glass: rgba(17, 22, 39, 0.6);
-  --color-glass-border: rgba(90, 101, 133, 0.2);
-  --color-glass-hover: rgba(26, 32, 53, 0.8);
-  --color-lime: #CCFF00;
-  --color-lime-dim: rgba(204, 255, 0, 0.15);
-  --color-lime-glow: rgba(204, 255, 0, 0.3);
+  --color-base-900: #FAFBFD;
+  --color-base-800: #FFFFFF;
+  --color-base-700: #F1F5F9;
+  --color-base-600: #E2E8F0;
+  --color-base-500: #94A3B8;
+  --color-base-400: #64748B;
+  --color-base-300: #1E293B;
+  --color-glass: rgba(255, 255, 255, 1);
+  --color-glass-border: rgba(226, 232, 240, 1);
+  --color-glass-hover: rgba(241, 245, 249, 1);
+  --color-lime: #6366F1;
+  --color-lime-dim: rgba(99, 102, 241, 0.10);
+  --color-lime-glow: rgba(99, 102, 241, 0.25);
   --font-family-display: 'Syne', sans-serif;
   --font-family-body: 'Outfit', sans-serif;
 }
@@ -21,7 +21,7 @@
 body {
   font-family: var(--font-family-body);
   background: var(--color-base-900);
-  color: #e2e8f0;
+  color: var(--color-base-300);
   min-height: 100vh;
 }
 
@@ -30,8 +30,8 @@ body::before {
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(ellipse at 20% 50%, rgba(204, 255, 0, 0.03) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 20%, rgba(59, 130, 246, 0.03) 0%, transparent 50%);
+    radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(99, 102, 241, 0.03) 0%, transparent 50%);
   pointer-events: none;
   z-index: 0;
 }
@@ -47,7 +47,7 @@ body::before {
 }
 
 .skeleton-shimmer {
-  background: linear-gradient(90deg, var(--color-base-800) 25%, var(--color-base-700) 50%, var(--color-base-800) 75%);
+  background: linear-gradient(90deg, #E2E8F0 25%, #F1F5F9 50%, #E2E8F0 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
