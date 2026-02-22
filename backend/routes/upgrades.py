@@ -54,12 +54,8 @@ def get_upgrade_candidates():
     return [dict(c) for c in candidates]
 
 
-@router.post("/scan")
-async def scan_for_upgrades(background_tasks: BackgroundTasks):
-    """Search squid.wtf for FLAC upgrades of all lossy candidates."""
-    if upgrade_status["running"]:
-        return {"error": "Upgrade scan already in progress"}
-
+def queue_upgrade_candidates() -> int:
+    """Queue lossy tracks for upgrade search. Returns count of newly queued candidates."""
     folders = _get_upgrade_folders()
 
     with get_db() as db:
@@ -95,8 +91,18 @@ async def scan_for_upgrades(background_tasks: BackgroundTasks):
                 (c["id"], query)
             )
 
+    return len(candidates)
+
+
+@router.post("/scan")
+async def scan_for_upgrades(background_tasks: BackgroundTasks):
+    """Search squid.wtf for FLAC upgrades of all lossy candidates."""
+    if upgrade_status["running"]:
+        return {"error": "Upgrade scan already in progress"}
+
+    queued = queue_upgrade_candidates()
     background_tasks.add_task(run_upgrade_search)
-    return {"queued": len(candidates)}
+    return {"queued": queued}
 
 
 @router.get("/status")

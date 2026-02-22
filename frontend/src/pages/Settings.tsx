@@ -16,7 +16,7 @@ export default function Settings() {
   const [loading, setLoading] = useState(true)
   const [threshold, setThreshold] = useState('0.85')
   const [rateLimit, setRateLimit] = useState('3')
-  const [autoResolve, setAutoResolve] = useState('0.95')
+  const [autoResolve, setAutoResolve] = useState('0')
   const [upgradeFolders, setUpgradeFolders] = useState('')
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export default function Settings() {
         setSettings(data)
         setThreshold(data.fingerprint_threshold)
         setRateLimit(data.squid_rate_limit)
-        setAutoResolve(data.auto_resolve_threshold || '0.95')
+        setAutoResolve(data.auto_resolve_threshold || '0')
         setUpgradeFolders(data.upgrade_scan_folders || '')
         setLoading(false)
       })

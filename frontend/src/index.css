@@ -11,9 +11,9 @@
   --color-glass: rgba(255, 255, 255, 1);
   --color-glass-border: rgba(226, 232, 240, 1);
   --color-glass-hover: rgba(241, 245, 249, 1);
-  --color-lime: #6366F1;
-  --color-lime-dim: rgba(99, 102, 241, 0.10);
-  --color-lime-glow: rgba(99, 102, 241, 0.25);
+  --color-lime: #10B981;
+  --color-lime-dim: rgba(16, 185, 129, 0.10);
+  --color-lime-glow: rgba(16, 185, 129, 0.25);
   --font-family-display: 'Syne', sans-serif;
   --font-family-body: 'Outfit', sans-serif;
 }
@@ -30,8 +30,8 @@ body::before {
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.04) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 20%, rgba(99, 102, 241, 0.03) 0%, transparent 50%);
+    radial-gradient(ellipse at 20% 50%, rgba(16, 185, 129, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(16, 185, 129, 0.03) 0%, transparent 50%);
   pointer-events: none;
   z-index: 0;
 }

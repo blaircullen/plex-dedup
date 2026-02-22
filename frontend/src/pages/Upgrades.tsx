@@ -320,7 +320,7 @@ export default function Upgrades() {
                         initial={{ opacity: 0 }}
                         animate={{
                           opacity: 1,
-                          backgroundColor: justApproved ? 'rgba(99, 102, 241, 0.06)' : 'transparent',
+                          backgroundColor: justApproved ? 'rgba(16, 185, 129, 0.06)' : 'transparent',
                         }}
                         exit={{ opacity: 0, x: -20 }}
                         className="border-b border-glass-border/50 hover:bg-base-800/30 transition-colors"

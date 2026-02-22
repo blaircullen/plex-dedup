@@ -14,13 +14,14 @@ interface Stats {
   upgrades_pending: number
 }
 
-const COLORS = ['#6366F1', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981']
+const COLORS = ['#10B981', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#06b6d4']
 
 const PHASE_LABELS: Record<string, string> = {
   counting: 'Counting files...',
   scanning: 'Scanning library...',
   cleaning: 'Removing stale records...',
   analyzing: 'Analyzing duplicates...',
+  upgrades: 'Searching for FLAC upgrades...',
   complete: 'Scan complete',
   idle: 'Idle',
 }
@@ -113,6 +114,7 @@ export default function Dashboard() {
               ? `${scan.progress.toLocaleString()} / ${scan.total.toLocaleString()}`
               : scan.phase === 'cleaning' ? 'Checking for removed files...'
               : scan.phase === 'analyzing' ? 'Finding duplicate groups...'
+              : scan.phase === 'upgrades' ? 'Checking Tidal for lossless versions...'
               : scan.phase === 'counting' ? 'Counting audio files...'
               : 'Starting...'
             }

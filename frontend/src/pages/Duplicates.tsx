@@ -72,7 +72,7 @@ export default function Duplicates() {
   const [loading, setLoading] = useState(true)
   const [resolving, setResolving] = useState<Set<number>>(new Set())
   const [expandedId, setExpandedId] = useState<number | null>(null)
-  const [filterTab, setFilterTab] = useState<FilterTab>('unresolved')
+  const [filterTab, setFilterTab] = useState<FilterTab>('all')
   const [sortKey, setSortKey] = useState<SortKey>('confidence')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [showBulkModal, setShowBulkModal] = useState(false)
@@ -103,10 +103,17 @@ export default function Duplicates() {
     try {
       const res = await fetch('/api/dupes/analyze', { method: 'POST' })
       const data = await res.json()
+      const parts: string[] = []
+      if (data.groups_found > 0) {
+        parts.push(`${data.groups_found} duplicate groups found`)
+      }
       if (data.auto_resolved > 0) {
-        toast.success(`Analysis complete — ${data.auto_resolved} high-confidence duplicates auto-resolved`)
+        parts.push(`${data.auto_resolved} auto-resolved`)
+      }
+      if (parts.length > 0) {
+        toast.success(`Analysis complete — ${parts.join(', ')}`)
       } else {
-        toast.success('Analysis complete')
+        toast.success('Analysis complete — no duplicates found')
       }
       await fetchDupes()
     } catch {

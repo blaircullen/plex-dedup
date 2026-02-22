@@ -17,7 +17,7 @@ export function Toaster() {
           boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
         },
         success: {
-          iconTheme: { primary: '#6366F1', secondary: '#FFFFFF' },
+          iconTheme: { primary: '#10B981', secondary: '#FFFFFF' },
         },
         error: {
           iconTheme: { primary: '#ef4444', secondary: '#FFFFFF' },

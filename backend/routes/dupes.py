@@ -14,7 +14,7 @@ def get_auto_resolve_threshold() -> float:
     """Get the auto-resolve confidence threshold from settings."""
     with get_db() as db:
         row = db.execute("SELECT value FROM settings WHERE key = 'auto_resolve_threshold'").fetchone()
-        return float(row["value"]) if row else 0.95
+        return float(row["value"]) if row else 0
 
 
 def auto_resolve_high_confidence(threshold: float = None) -> int:
@@ -73,15 +73,23 @@ def analyze_dupes():
     return {"groups_found": len(results), "auto_resolved": auto_resolved, "results": results}
 
 @router.get("/")
-def list_dupes(resolved: bool = False):
+def list_dupes(resolved: bool = None):
     with get_db() as db:
-        groups = db.execute("""
-            SELECT dg.*, GROUP_CONCAT(dgm.track_id) as member_ids
-            FROM dupe_groups dg
-            JOIN dupe_group_members dgm ON dg.id = dgm.group_id
-            WHERE dg.resolved = ?
-            GROUP BY dg.id
-        """, (int(resolved),)).fetchall()
+        if resolved is None:
+            groups = db.execute("""
+                SELECT dg.*, GROUP_CONCAT(dgm.track_id) as member_ids
+                FROM dupe_groups dg
+                JOIN dupe_group_members dgm ON dg.id = dgm.group_id
+                GROUP BY dg.id
+            """).fetchall()
+        else:
+            groups = db.execute("""
+                SELECT dg.*, GROUP_CONCAT(dgm.track_id) as member_ids
+                FROM dupe_groups dg
+                JOIN dupe_group_members dgm ON dg.id = dgm.group_id
+                WHERE dg.resolved = ?
+                GROUP BY dg.id
+            """, (int(resolved),)).fetchall()
 
         result = []
         for g in groups:

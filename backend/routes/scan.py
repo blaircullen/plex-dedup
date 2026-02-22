@@ -3,6 +3,7 @@ from database import get_db
 from scanner import scan_directory, generate_fingerprint, AUDIO_EXTENSIONS
 from dedup import group_by_metadata, find_duplicates
 from routes.dupes import auto_resolve_high_confidence
+from routes.upgrades import queue_upgrade_candidates, run_upgrade_search
 from pathlib import Path
 import asyncio
 import os
@@ -152,6 +153,17 @@ def run_scan(music_path: Path):
                 logger.info(f"Auto-resolved {auto_resolved} high-confidence duplicates after scan")
         except Exception as e:
             logger.error(f"Auto duplicate analysis failed: {e}")
+
+        # Phase 5: Search for FLAC upgrades of lossy tracks
+        scan_status["phase"] = "upgrades"
+        scan_status["current_file"] = "Searching for FLAC upgrades..."
+        try:
+            queued = queue_upgrade_candidates()
+            if queued > 0:
+                logger.info(f"Queued {queued} tracks for upgrade search")
+            run_upgrade_search()
+        except Exception as e:
+            logger.error(f"Upgrade search failed: {e}")
 
         scan_status["phase"] = "complete"
     finally:
